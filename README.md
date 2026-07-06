@@ -151,7 +151,7 @@ graph TD
     %% Node Styling for high contrast dark & light mode
     style Start fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
     style End fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
-    style Spacer fill:none,stroke:none,color:rgba(0,0,0,0)
+    style Spacer fill:none,stroke:none
     
     style Service fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
     style Resolver fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
