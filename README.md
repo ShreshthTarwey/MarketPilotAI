@@ -145,12 +145,35 @@ graph TD
     
     Node6 --> End([Completed: Final Report JSON])
     
-    style Node1 fill:#d4ebf2,stroke:#333,stroke-width:2px
-    style Node2 fill:#d4ebf2,stroke:#333,stroke-width:2px
-    style Node3 fill:#ffe6cc,stroke:#333,stroke-width:2px
-    style Node4 fill:#d4ebf2,stroke:#333,stroke-width:2px
-    style Node5 fill:#d5e8d4,stroke:#333,stroke-width:2px
-    style Node6 fill:#e1d5e7,stroke:#333,stroke-width:2px
+    %% Spacer to prevent GitHub controls overlap
+    End --> Spacer["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+    
+    %% Node Styling for high contrast dark & light mode
+    style Start fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
+    style End fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
+    style Spacer fill:none,stroke:none,color:rgba(0,0,0,0)
+    
+    style Service fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
+    style Resolver fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
+    style Service2 fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
+    style Router fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
+    style Yahoo fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
+    style Edgar fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
+    style Tavily fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
+    style Gate fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
+    style Scorecard fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
+    style LLM fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
+    
+    style Edge fill:#374151,stroke:#4b5563,stroke-width:1px,color:#fff
+    
+    style Node1 fill:#d4ebf2,stroke:#0891b2,stroke-width:2px,color:#083344
+    style Node2 fill:#d4ebf2,stroke:#0891b2,stroke-width:2px,color:#083344
+    style Node4 fill:#d4ebf2,stroke:#0891b2,stroke-width:2px,color:#083344
+    
+    style Node3 fill:#ffe6cc,stroke:#ea580c,stroke-width:2px,color:#431407
+    
+    style Node5 fill:#d5e8d4,stroke:#16a34a,stroke-width:2px,color:#052e16
+    style Node6 fill:#e1d5e7,stroke:#9333ea,stroke-width:2px,color:#3b0764
 ```
 
 
