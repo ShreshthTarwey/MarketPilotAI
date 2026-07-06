@@ -26,16 +26,16 @@ MarketPilot AI is a production-oriented AI Investment Research Agent designed to
 | Phase | Title | Focus Areas | Status |
 | :--- | :--- | :--- | :--- |
 | **Phase 1** | **Foundation Layer** | Env validation, graph state schema, provider contracts, and interface files. | **Complete** |
-| **Phase 2** | **Data & Provider Layer** | Caching, concrete Yahoo/Tavily integrations, and fallback router logic. | **In Progress (Refining)** |
-| **Phase 3** | **LangGraph Orchestration**| Building execution nodes, quality evaluation logic, and Graph state machine. | *Upcoming* |
+| **Phase 2** | **Data & Provider Layer** | Caching, concrete Yahoo/Tavily integrations, and fallback router logic. | **Complete** |
+| **Phase 3** | **LangGraph Orchestration**| Building execution nodes, quality evaluation logic, and Graph state machine. | **In Progress** |
 | **Phase 4** | **Deterministic Scoring** | JavaScript scorecard calculator, confidence weights, and financial formulas. | *Upcoming* |
 | **Phase 5** | **LLM Synthesis & API** | Gemini prompt configurations, Express JSON endpoints, and error fallbacks. | *Upcoming* |
 | **Phase 6** | **React Frontend Dashboard** | Interactive interface, progress trackers, scores visuals, and citation cards. | *Upcoming* |
 
 ---
 
-## Development Progress (Current Status: Phase 2 Refinement)
-We are currently integrating the **Refined Provider Router and Quality Gate** into the data layer:
+## Development Progress (Current Status: Phase 3)
+We are currently compiling the **LangGraph Orchestration (Phase 3)**:
 *   [x] **Foundation Layer (Phase 1):** Completed environment validation, graph state annotations, and provider interface abstractions.
 *   [x] **Cache Layer (Module 1):** Implemented an in-memory TTL caching engine ([memoryCache.js](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/providers/cache/memoryCache.js)) with automated key pruning.
 *   [x] **Company Resolution Provider (Module 2):** Developed [companyResolver.js](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/providers/implementations/companyResolver.js) supporting deterministic lookup and verified LLM autocorrection.
@@ -92,3 +92,77 @@ We discard generic boolean checks for a multi-category scorecard logic.
 *   **Diagnostic Nodes:** The gate evaluates **Profile, Income Statement, Balance Sheet, Cash Flow, and News** independently.
 *   **Recollection Loops:** If any category drops below its configured completeness threshold (e.g. 80%), only the missing fields in that category are routed to fallback collection.
 *   **Immutability:** Previously verified data is locked in state to prevent infinite loops and limit API token usage.
+
+---
+
+## LangGraph Orchestration Architecture (Phase 3)
+
+The workflow executes through isolated, single-responsibility nodes. Previously validated data is preserved during loops, and external calls are isolated behind the `EvidenceService` abstraction.
+
+### Node Flow Diagram
+
+![Orchestration Workflow Diagram](docs/architecture_workflow.png)
+
+*Mermaid Workflow Source:*
+```mermaid
+graph TD
+    Start([User Input: Company Name Query]) --> Node1[resolveCompanyNode]
+    
+    %% resolveCompanyNode calls
+    Node1 -- calls --> Service[EvidenceService.resolveCompany]
+    Service -- calls --> Resolver[companyResolver.js]
+    
+    Node1 --> Node2[collectEvidenceNode]
+    
+    %% collectEvidenceNode calls
+    Node2 -- calls --> Service2[EvidenceService.getProfile/getFinancials/getNews/getPriceHistory]
+    Service2 -- calls --> Router[providerRouter.js]
+    Router -- calls --> Yahoo[yahooFinance.js]
+    Router -- calls --> Edgar[secEdgar.js]
+    Router -- calls --> Tavily[tavilySearch.js]
+    
+    Node2 --> Node3[evaluateQualityNode]
+    
+    %% evaluateQualityNode calls
+    Node3 -- calls --> Gate[scoring/qualityGate.js]
+    
+    Node3 --> Edge{Enough Evidence? <br> Score >= 80% or Attempts >= 2}
+    
+    %% Branching
+    Edge -- No --> Node4[recollectMissingNode]
+    Node4 -- calls --> Service2
+    Node4 -- Loops back --> Node3
+    
+    Edge -- Yes --> Node5[computeScoresNode]
+    
+    %% computeScoresNode calls
+    Node5 -- Runs pure JS math --> Scorecard[solvency/profitability scoring]
+    
+    Node5 --> Node6[generateRecommendationNode]
+    
+    %% generateRecommendationNode calls
+    Node6 -- calls --> LLM[llmRouter.js]
+    
+    Node6 --> End([Completed: Final Report JSON])
+    
+    style Node1 fill:#d4ebf2,stroke:#333,stroke-width:2px
+    style Node2 fill:#d4ebf2,stroke:#333,stroke-width:2px
+    style Node3 fill:#ffe6cc,stroke:#333,stroke-width:2px
+    style Node4 fill:#d4ebf2,stroke:#333,stroke-width:2px
+    style Node5 fill:#d5e8d4,stroke:#333,stroke-width:2px
+    style Node6 fill:#e1d5e7,stroke:#333,stroke-width:2px
+```
+
+
+
+### Node Responsibilities Sequence
+
+| Sequence | Node Name | Triggered When | Reads from State | Calls Which File(s) | Writes to State |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **1** | **`resolveCompanyNode`** | Graph start. | `inputCompanyName` | `evidenceService.js` $\rightarrow$ `companyResolver.js` | `resolvedTicker`, `resolvedName`, `market`, `executionStage` |
+| **2** | **`collectEvidenceNode`** | Autocomplete succeeds. | `resolvedTicker`, `resolvedName`, `market`, `recollectionAttempts` | `evidenceService.js` $\rightarrow$ `providerRouter.js` | `profile`, `financials`, `news`, `marketContext`, `sources`, `fallbackHistory`, `recoveryHistory`, `executionStage` |
+| **3** | **`evaluateQualityNode`** | Primary fetch finishes. | `profile`, `financials`, `news` | `scoring/qualityGate.js` | `qualityReport`, `missingFields`, `warnings`, `executionStage` |
+| **4** | **`recollectMissingNode`** | Evaluator flags `recollectionRequired` as `true` (and attempts < 2). | `resolvedTicker`, `market`, `qualityReport` | `evidenceService.js` (Targeted targeted recall) | Updates `recollectionAttempts`, merges recovered elements, loops back |
+| **5** | **`computeScoresNode`** | Evaluator flags `recollectionRequired` as `false` (or attempts = 2). | `financials`, `marketContext` | Runs pure internal JS math (no files called) | `scores`, `executionStage` |
+| **6** | **`generateRecommendationNode`**| Scoring finishes. | `resolvedTicker`, `profile`, `scores`, `news` | `providers/llmRouter.js` | `recommendation`, `executionStage` |
+
