@@ -71,6 +71,73 @@ To guarantee the reliability of individual data retrievers prior to graph orches
 
 ---
 
+## Systems Architecture Diagram
+
+```mermaid
+flowchart TD
+    Client([React Frontend / Client]) -->|GET /api/resolve| APIResolve[Express resolve Endpoint]
+    Client -->|GET/POST /api/research| APIResearch[Express research Endpoint]
+    
+    APIResolve -->|autocomplete lookup| Resolver[companyResolver.js]
+    Resolver -->|returns ticker| APIResolve
+    APIResolve -->|JSON ticker response| Client
+    
+    APIResearch -->|State Inits| Node0[validateInputNode]
+    Node0 -->|Passed| Node1[resolveCompanyNode]
+    Node1 -->|Evidence Service| Resolver
+    
+    Node1 --> Node2[collectEvidenceNode]
+    Node2 -->|Parallel concurrent sweeps| Service2[EvidenceService]
+    Service2 -->|cascades fallback router| Router[providerRouter.js]
+    
+    Node2 -->|Normalizes and logs provenance| Aggregator[evidenceAggregator.js]
+    Aggregator -->|returns confidence| Node2
+    
+    Node2 --> Node3[evaluateQualityNode]
+    Node3 -->|Runs quality diagnostics| Gate[scoring/qualityGate.js]
+    
+    Node3 --> Edge{Completeness >= 80% <br> or Loop >= 2?}
+    
+    Edge -->|No| Node4[recollectMissingNode]
+    Node4 -->|targeted recollection cascade| Service2
+    Node4 -->|Loops back| Node3
+    
+    Edge -->|Yes| Node5[computeScoresNode]
+    Node5 -->|profitability/solvency ratios| Node5
+    
+    Node5 --> Node55[computeValuationNode]
+    Node55 -->|CAPM Cost of Equity / DCF / Comps multiples| Calculator[scoring/valuationCalculator.js]
+    Calculator -->|uses macro policy guidelines| Config[valuationConfig.js]
+    
+    Node55 --> Node6[generateRecommendationNode]
+    Node6 -->|qualitative prompt constraints| LLM[llmRouter.js]
+    
+    Node6 --> End([State Completed])
+    End -->|returns structured report| APIResearch
+    APIResearch -->|HTTP 200 JSON Response| Client
+    
+    style Client fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
+    style End fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
+    style Resolver fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
+    style Router fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
+    style Gate fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
+    style Calculator fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
+    style LLM fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
+    style Config fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
+    style Edge fill:#374151,stroke:#4b5563,stroke-width:1px,color:#fff
+    
+    style Node0 fill:#ffe6cc,stroke:#ea580c,stroke-width:2px,color:#431407
+    style Node1 fill:#d4ebf2,stroke:#0891b2,stroke-width:2px,color:#083344
+    style Node2 fill:#d4ebf2,stroke:#0891b2,stroke-width:2px,color:#083344
+    style Node4 fill:#d4ebf2,stroke:#0891b2,stroke-width:2px,color:#083344
+    style Node3 fill:#ffe6cc,stroke:#ea580c,stroke-width:2px,color:#431407
+    style Node5 fill:#d5e8d4,stroke:#16a34a,stroke-width:2px,color:#052e16
+    style Node55 fill:#d5e8d4,stroke:#16a34a,stroke-width:2px,color:#052e16
+    style Node6 fill:#e1d5e7,stroke:#9333ea,stroke-width:2px,color:#3b0764
+```
+
+---
+
 ## Key Decisions & Trade-offs
 
 ### Decoupled Resilient LLM Routing
@@ -352,71 +419,4 @@ MarketPilotAI/
 5.  **Configurable Financial Assumptions:** Macro variables (CAPM rates, multiples weights, forecast horizon) are centralized in configuration files, making it easy to adapt to changing market conditions.
 6.  **Observability & Transparency:** Every calculation leaves a detailed log trail. Intermediate metrics (cash flows, terminal values, present values) are exposed in the JSON response, making the engine easy to debug and verify.
 7.  **Future Extensibility:** The architecture is designed to accommodate additional structured API providers, portfolio management features, and alternative valuation models.
-
----
-
-### 7. Mermaid Systems Architecture Diagram
-
-```mermaid
-flowchart TD
-    Client([React Frontend / Client]) -->|GET /api/resolve| APIResolve[Express resolve Endpoint]
-    Client -->|GET/POST /api/research| APIResearch[Express research Endpoint]
-    
-    APIResolve -->|autocomplete lookup| Resolver[companyResolver.js]
-    Resolver -->|returns ticker| APIResolve
-    APIResolve -->|JSON ticker response| Client
-    
-    APIResearch -->|State Inits| Node0[validateInputNode]
-    Node0 -->|Passed| Node1[resolveCompanyNode]
-    Node1 -->|Evidence Service| Resolver
-    
-    Node1 --> Node2[collectEvidenceNode]
-    Node2 -->|Parallel concurrent sweeps| Service2[EvidenceService]
-    Service2 -->|cascades fallback router| Router[providerRouter.js]
-    
-    Node2 -->|Normalizes and logs provenance| Aggregator[evidenceAggregator.js]
-    Aggregator -->|returns confidence| Node2
-    
-    Node2 --> Node3[evaluateQualityNode]
-    Node3 -->|Runs quality diagnostics| Gate[scoring/qualityGate.js]
-    
-    Node3 --> Edge{Completeness >= 80% <br> or Loop >= 2?}
-    
-    Edge -->|No| Node4[recollectMissingNode]
-    Node4 -->|targeted recollection cascade| Service2
-    Node4 -->|Loops back| Node3
-    
-    Edge -->|Yes| Node5[computeScoresNode]
-    Node5 -->|profitability/solvency ratios| Node5
-    
-    Node5 --> Node55[computeValuationNode]
-    Node55 -->|CAPM Cost of Equity / DCF / Comps multiples| Calculator[scoring/valuationCalculator.js]
-    Calculator -->|uses macro policy guidelines| Config[valuationConfig.js]
-    
-    Node55 --> Node6[generateRecommendationNode]
-    Node6 -->|qualitative prompt constraints| LLM[llmRouter.js]
-    
-    Node6 --> End([State Completed])
-    End -->|returns structured report| APIResearch
-    APIResearch -->|HTTP 200 JSON Response| Client
-    
-    style Client fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
-    style End fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
-    style Resolver fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
-    style Router fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
-    style Gate fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
-    style Calculator fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
-    style LLM fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
-    style Config fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
-    style Edge fill:#374151,stroke:#4b5563,stroke-width:1px,color:#fff
-    
-    style Node0 fill:#ffe6cc,stroke:#ea580c,stroke-width:2px,color:#431407
-    style Node1 fill:#d4ebf2,stroke:#0891b2,stroke-width:2px,color:#083344
-    style Node2 fill:#d4ebf2,stroke:#0891b2,stroke-width:2px,color:#083344
-    style Node4 fill:#d4ebf2,stroke:#0891b2,stroke-width:2px,color:#083344
-    style Node3 fill:#ffe6cc,stroke:#ea580c,stroke-width:2px,color:#431407
-    style Node5 fill:#d5e8d4,stroke:#16a34a,stroke-width:2px,color:#052e16
-    style Node55 fill:#d5e8d4,stroke:#16a34a,stroke-width:2px,color:#052e16
-    style Node6 fill:#e1d5e7,stroke:#9333ea,stroke-width:2px,color:#3b0764
-```
 
