@@ -1,10 +1,11 @@
 /**
  * recollectMissing.js
  * Graph node responsible for running targeted recollection checks.
- * Incrementing recollection attempts and patching missing fields.
+ * Incrementing recollection attempts, calling fallbacks, and aggregate new entries.
  */
 
 const evidenceService = require('../../services/evidenceService');
+const { aggregateEvidence } = require('../../scoring/evidenceAggregator');
 
 /**
  * Node function to target recover only missing categories.
@@ -23,10 +24,16 @@ async function recollectMissingNode(state) {
   const report = state.qualityReport || {};
   const updates = {
     recollectionAttempts: nextAttempt,
-    executionStage: 'evaluating quality'
+    executionStage: 'evaluating quality',
+    providerCoverage: { ...(state.providerCoverage || {}) },
+    fallbackHistory: [...(state.fallbackHistory || [])],
+    recoveryHistory: [...(state.recoveryHistory || [])]
   };
 
   const tasks = [];
+  let nextProfile = state.profile;
+  let nextFinancials = state.financials;
+  let nextNews = state.news;
 
   // 1. Recover Profile if below 80%
   const shouldRecoverProfile = report.profile < 80;
@@ -35,9 +42,9 @@ async function recollectMissingNode(state) {
     tasks.push(
       evidenceService.getProfile(ticker, market).then(res => {
         if (res.profile) {
-          updates.profile = { ...state.profile, ...res.profile };
-          updates.sources = { ...updates.sources, ...res.sources };
-          updates.fallbackHistory = [...(res.fallbackHistory || [])];
+          nextProfile = { ...state.profile, ...res.profile };
+          updates.providerCoverage = { ...updates.providerCoverage, ...res.sources };
+          updates.fallbackHistory = [...updates.fallbackHistory, ...(res.fallbackHistory || [])];
         }
       })
     );
@@ -50,12 +57,10 @@ async function recollectMissingNode(state) {
     tasks.push(
       evidenceService.getFinancials(ticker, market, nextAttempt).then(res => {
         if (res.financials) {
-          // Note: financials merge is handled inside the router's field patching logic,
-          // so we can overwrite/merge the financials directly in the updates payload.
-          updates.financials = res.financials;
-          updates.sources = { ...updates.sources, ...res.sources };
-          updates.fallbackHistory = [...(updates.fallbackHistory || []), ...(res.fallbackHistory || [])];
-          updates.recoveryHistory = [...(res.recoveryHistory || [])];
+          nextFinancials = res.financials;
+          updates.providerCoverage = { ...updates.providerCoverage, ...res.sources };
+          updates.fallbackHistory = [...updates.fallbackHistory, ...(res.fallbackHistory || [])];
+          updates.recoveryHistory = [...updates.recoveryHistory, ...(res.recoveryHistory || [])];
         }
       })
     );
@@ -68,9 +73,9 @@ async function recollectMissingNode(state) {
     tasks.push(
       evidenceService.getNews(name).then(res => {
         if (res.news && res.news.length > 0) {
-          updates.news = res.news;
-          updates.sources = { ...updates.sources, ...res.sources };
-          updates.fallbackHistory = [...(updates.fallbackHistory || []), ...(res.fallbackHistory || [])];
+          nextNews = res.news;
+          updates.providerCoverage = { ...updates.providerCoverage, ...res.sources };
+          updates.fallbackHistory = [...updates.fallbackHistory, ...(res.fallbackHistory || [])];
         }
       })
     );
@@ -79,6 +84,24 @@ async function recollectMissingNode(state) {
   // Wait for all active recovery requests to resolve
   if (tasks.length > 0) {
     await Promise.all(tasks);
+
+    // Run the intermediate Evidence Aggregator Layer to merge and normalize the newly recovered elements
+    const rawState = {
+      profile: nextProfile,
+      financials: nextFinancials,
+      news: nextNews,
+      marketContext: state.marketContext || {},
+      sources: updates.providerCoverage,
+      recoveryHistory: updates.recoveryHistory
+    };
+
+    const aggregated = aggregateEvidence(rawState);
+
+    updates.profile = aggregated.profile;
+    updates.financials = aggregated.financials;
+    updates.news = aggregated.news;
+    updates.marketContext = aggregated.marketContext;
+    updates.providerCoverage = aggregated.sources;
   } else {
     console.log(`[Graph Node]: No low completeness indicators found. Skipping recollection.`);
   }

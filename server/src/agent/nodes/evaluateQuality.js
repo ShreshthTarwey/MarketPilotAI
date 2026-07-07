@@ -1,7 +1,7 @@
 /**
  * evaluateQuality.js
  * Graph node responsible for running the diagnostic validation scorecard check.
- * Evaluates completeness across all evidence categories.
+ * Evaluates completeness across all evidence categories and updates evidenceCompleteness.
  */
 
 const { evaluateQualityGate } = require('../../scoring/qualityGate');
@@ -32,6 +32,7 @@ async function evaluateQualityNode(state) {
 
   return {
     qualityReport: report,
+    evidenceCompleteness: report.overall, // Set overall score as evidenceCompleteness
     missingFields: report.missingFields,
     warnings,
     executionStage: report.recollectionRequired ? 'recollecting missing evidence' : 'computing scores'

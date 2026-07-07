@@ -2,9 +2,11 @@
  * generateRecommendation.js
  * Graph node responsible for qualitative synthesis and investment recommendation generation.
  * Merges scores, profile, news, and history, asking the LLM to output a structured report.
+ * Uses a deterministic confidence score calculated in JavaScript and disables target pricing.
  */
 
 const LLMRouter = require('../../providers/llmRouter');
+const { calculateConfidence } = require('../../scoring/evidenceAggregator');
 const llm = new LLMRouter();
 
 /**
@@ -21,6 +23,9 @@ async function generateRecommendationNode(state) {
   const profile = state.profile || {};
   const scores = state.scores || {};
   const news = state.news || [];
+
+  // Calculate the deterministic confidence score in JavaScript (not the LLM)
+  const confidenceScore = calculateConfidence(state);
 
   // Construct a summary of recent articles for prompt context
   const newsSummary = news.slice(0, 5).map(article => 
@@ -44,17 +49,22 @@ ${profile.description || 'N/A'}
 3. Recent News & Developments:
 ${newsSummary || 'No recent news articles collected.'}
 
-Synthesize these inputs. Your target rating must align with the quantitative scores (e.g. scores > 75 lean Bullish/Buy, scores < 40 lean Bearish/Sell).
+4. Analysis Assessment:
+- Deterministic analysis confidence level calculated in JS: ${confidenceScore}%
+
+Synthesize these inputs. Your target rating must align with the quantitative scores.
+NOTE: Since a deterministic valuation algorithm has NOT yet been implemented in our system, do NOT invent or hallucinate a target stock price. You MUST output "targetPrice": null.
+
 You must output STRICTLY a JSON object matching this schema:
 {
   "rating": "Buy" | "Hold" | "Sell",
-  "targetPrice": 123.45,
+  "targetPrice": null,
   "investmentThesis": "A concise 2-3 paragraph explanation of the bullish or bearish thesis supporting the rating.",
   "risks": [
     "Key risk factor 1 description",
     "Key risk factor 2 description"
   ],
-  "confidenceScore": 85
+  "confidenceScore": ${confidenceScore}
 }
 Return only JSON. Do not write markdown quotes or conversational prefixes.
 `;
@@ -62,6 +72,10 @@ Return only JSON. Do not write markdown quotes or conversational prefixes.
   try {
     const { data } = await llm.generateJSON(prompt);
     
+    // Explicit safety overwrite to guarantee targetPrice is null/not guessed
+    data.targetPrice = null;
+    data.confidenceScore = confidenceScore;
+
     console.log(`[Graph Node]: Investment report compiled. Recommendation rating: ${data.rating}`);
 
     return {
@@ -74,10 +88,10 @@ Return only JSON. Do not write markdown quotes or conversational prefixes.
     // Graceful degradation: return a fallback recommendation object
     const fallbackRec = {
       rating: scores.overallScore > 65 ? 'Hold/Buy' : 'Hold/Sell',
-      targetPrice: 0,
+      targetPrice: null,
       investmentThesis: `Quantitative scorecard calculation returned a score of ${scores.overallScore}/100. However, the qualitative synthesis failed due to: ${err.message}`,
       risks: ["System processing limits", "LLM fallback triggered"],
-      confidenceScore: 50
+      confidenceScore: confidenceScore
     };
 
     return {

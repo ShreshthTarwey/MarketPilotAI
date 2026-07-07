@@ -1,10 +1,11 @@
 /**
  * collectEvidence.js
  * Graph node responsible for running primary ingestion across all evidence categories.
- * Calls the EvidenceService and aggregates initial profiles, financials, and news.
+ * Executes concurrent queries via Promise.all and normalizes data via the Evidence Aggregator.
  */
 
 const evidenceService = require('../../services/evidenceService');
+const { aggregateEvidence } = require('../../scoring/evidenceAggregator');
 
 /**
  * Node function to gather primary structured evidence in parallel.
@@ -19,7 +20,7 @@ async function collectEvidenceNode(state) {
 
   console.log(`[Graph Node]: Executing collectEvidenceNode for Ticker: "${ticker}" (${market})`);
 
-  // Run initial queries in parallel to minimize latency
+  // Run queries in parallel concurrently
   const [profileResult, financialsResult, newsResult, priceHistory] = await Promise.all([
     evidenceService.getProfile(ticker, market),
     evidenceService.getFinancials(ticker, market, state.recollectionAttempts + 1),
@@ -27,29 +28,37 @@ async function collectEvidenceNode(state) {
     evidenceService.getPriceHistory(ticker, market)
   ]);
 
-  // Combine and format the price stats as market context
-  const marketContext = {
-    priceHistory,
-    lastRefreshed: new Date().toISOString()
-  };
-
-  return {
+  // Assemble raw collection trace
+  const rawState = {
     profile: profileResult.profile,
     financials: financialsResult.financials,
     news: newsResult.news,
-    marketContext,
+    marketContext: { priceHistory },
     sources: {
       ...profileResult.sources,
       ...financialsResult.sources,
       ...newsResult.sources,
       priceHistory: { providerName: 'YahooChart', fetchedAt: new Date().toISOString() }
     },
+    recoveryHistory: financialsResult.recoveryHistory || []
+  };
+
+  // Invoke the intermediate Evidence Aggregator Layer
+  const aggregated = aggregateEvidence(rawState);
+
+  // Maps sources to providerCoverage explicitly
+  return {
+    profile: aggregated.profile,
+    financials: aggregated.financials,
+    news: aggregated.news,
+    marketContext: aggregated.marketContext,
+    providerCoverage: aggregated.sources,
     fallbackHistory: [
       ...(profileResult.fallbackHistory || []),
       ...(financialsResult.fallbackHistory || []),
       ...(newsResult.fallbackHistory || [])
     ],
-    recoveryHistory: financialsResult.recoveryHistory || [],
+    recoveryHistory: rawState.recoveryHistory,
     executionStage: 'evaluating quality'
   };
 }

@@ -3,6 +3,7 @@
  * Concrete Financial Data Provider implementing Yahoo Finance.
  * Extends IFinancialDataProvider and conforms to unified schemas.
  * Includes both quoteSummary and fundamentalsTimeSeries modules.
+ * Implements in-flight request de-duplication to prevent cache stampedes.
  */
 
 const IFinancialDataProvider = require('../interfaces/financialProvider');
@@ -14,6 +15,8 @@ class YahooFinanceProvider extends IFinancialDataProvider {
   constructor() {
     super();
     this.cachePrefix = 'yahoo-financials';
+    // In-flight promise registry to de-duplicate concurrent fetches (cache stampede prevention)
+    this.inFlightBundles = new Map();
   }
 
   /**
@@ -43,7 +46,7 @@ class YahooFinanceProvider extends IFinancialDataProvider {
 
   /**
    * Internal helper to retrieve the full quoteSummary bundle from Yahoo Finance.
-   * Utilizes MemoryCache.
+   * Resolves concurrent cache stampede drops by returning a single shared promise.
    * 
    * @param {string} ticker 
    * @returns {Promise<Object>} Raw summary bundle.
@@ -52,9 +55,16 @@ class YahooFinanceProvider extends IFinancialDataProvider {
     const symbol = ticker.trim().toUpperCase();
     const cacheKey = cache.generateKey(this.cachePrefix, symbol);
     
+    // 1. Check completed memory cache
     const cached = cache.get(cacheKey);
     if (cached) {
       return cached;
+    }
+
+    // 2. Check if a duplicate request for this ticker is already in-flight
+    if (this.inFlightBundles.has(symbol)) {
+      console.log(`[Yahoo Finance]: Reusing concurrent in-flight promise for "${symbol}"`);
+      return this.inFlightBundles.get(symbol);
     }
 
     const modules = [
@@ -69,14 +79,25 @@ class YahooFinanceProvider extends IFinancialDataProvider {
       'cashflowStatementHistoryQuarterly'
     ];
 
-    console.log(`[Yahoo Finance]: Fetching quoteSummary modules for "${symbol}"`);
-    
-    // Disable validation errors for keys we don't care about (e.g. empty modules)
+    console.log(`[Yahoo Finance]: Fetching QuoteSummary modules for "${symbol}"`);
     const options = { validateResult: false };
     
-    const summary = await yahooFinance.quoteSummary(symbol, { modules }, options);
-    cache.set(cacheKey, summary);
-    return summary;
+    // Instantiate fetching promise
+    const fetchPromise = yahooFinance.quoteSummary(symbol, { modules }, options)
+      .then(summary => {
+        // Cache success payload and clear promise registry entry
+        cache.set(cacheKey, summary);
+        this.inFlightBundles.delete(symbol);
+        return summary;
+      })
+      .catch(err => {
+        // Clear promise entry to allow retry triggers later
+        this.inFlightBundles.delete(symbol);
+        throw err;
+      });
+
+    this.inFlightBundles.set(symbol, fetchPromise);
+    return fetchPromise;
   }
 
   /**

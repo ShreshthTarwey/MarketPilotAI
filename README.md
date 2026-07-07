@@ -93,6 +93,18 @@ We discard generic boolean checks for a multi-category scorecard logic.
 *   **Recollection Loops:** If any category drops below its configured completeness threshold (e.g. 80%), only the missing fields in that category are routed to fallback collection.
 *   **Immutability:** Previously verified data is locked in state to prevent infinite loops and limit API token usage.
 
+### In-Flight Promise Caching (Cache Stampede Protection)
+When collecting profile and financials in parallel, they trigger concurrently. To prevent duplicate HTTP requests to Yahoo Finance QuoteSummary, the provider layer caches the active **Promise** in a registry. The concurrent call awaits and reuses the same request promise.
+
+### Evidence Aggregator Layer
+An intermediate layer that normalizes multi-provider shapes, removes duplicates, consolidates metadata into `providerCoverage`, and calculates a **deterministic confidence score** entirely in JavaScript before passing it to the reasoning node.
+
+### Deterministic Confidence Scoring
+Calculated in JavaScript (not the LLM) based on evidence completeness, fallback levels triggered, missing critical variables, and provider weights.
+
+### Disabled Target Prices
+Until a deterministic valuation algorithm (DCF/multiples) is implemented in JavaScript (Phase 4), target prices are disabled (`null` / `"Not Estimated"`) to prevent LLM hallucinations.
+
 ---
 
 ## LangGraph Orchestration Architecture (Phase 3)
@@ -106,7 +118,8 @@ The workflow executes through isolated, single-responsibility nodes. Previously 
 *Mermaid Workflow Source:*
 ```mermaid
 graph TD
-    Start([User Input: Company Name Query]) --> Node1[resolveCompanyNode]
+    Start([User Input: Company Name Query]) --> Node0[validateInputNode]
+    Node0 -- Checks query length/chars --> Node1[resolveCompanyNode]
     
     %% resolveCompanyNode calls
     Node1 -- calls --> Service[EvidenceService.resolveCompany]
@@ -115,11 +128,11 @@ graph TD
     Node1 --> Node2[collectEvidenceNode]
     
     %% collectEvidenceNode calls
-    Node2 -- calls --> Service2[EvidenceService.getProfile/getFinancials/getNews/getPriceHistory]
+    Node2 -- Parallel concurrent fetch --> Service2[EvidenceService queries]
     Service2 -- calls --> Router[providerRouter.js]
-    Router -- calls --> Yahoo[yahooFinance.js]
-    Router -- calls --> Edgar[secEdgar.js]
-    Router -- calls --> Tavily[tavilySearch.js]
+    
+    Node2 -- Normalizes via --> Aggregator[evidenceAggregator.js]
+    Aggregator -- Calculates --> Confidence[Deterministic Confidence Score]
     
     Node2 --> Node3[evaluateQualityNode]
     
@@ -130,7 +143,7 @@ graph TD
     
     %% Branching
     Edge -- No --> Node4[recollectMissingNode]
-    Node4 -- calls --> Service2
+    Node4 -- targeted recall --> Service2
     Node4 -- Loops back --> Node3
     
     Edge -- Yes --> Node5[computeScoresNode]
@@ -166,6 +179,7 @@ graph TD
     
     style Edge fill:#374151,stroke:#4b5563,stroke-width:1px,color:#fff
     
+    style Node0 fill:#ffe6cc,stroke:#ea580c,stroke-width:2px,color:#431407
     style Node1 fill:#d4ebf2,stroke:#0891b2,stroke-width:2px,color:#083344
     style Node2 fill:#d4ebf2,stroke:#0891b2,stroke-width:2px,color:#083344
     style Node4 fill:#d4ebf2,stroke:#0891b2,stroke-width:2px,color:#083344
@@ -176,16 +190,15 @@ graph TD
     style Node6 fill:#e1d5e7,stroke:#9333ea,stroke-width:2px,color:#3b0764
 ```
 
-
-
 ### Node Responsibilities Sequence
 
 | Sequence | Node Name | Triggered When | Reads from State | Calls Which File(s) | Writes to State |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **1** | **`resolveCompanyNode`** | Graph start. | `inputCompanyName` | `evidenceService.js` $\rightarrow$ `companyResolver.js` | `resolvedTicker`, `resolvedName`, `market`, `executionStage` |
-| **2** | **`collectEvidenceNode`** | Autocomplete succeeds. | `resolvedTicker`, `resolvedName`, `market`, `recollectionAttempts` | `evidenceService.js` $\rightarrow$ `providerRouter.js` | `profile`, `financials`, `news`, `marketContext`, `sources`, `fallbackHistory`, `recoveryHistory`, `executionStage` |
-| **3** | **`evaluateQualityNode`** | Primary fetch finishes. | `profile`, `financials`, `news` | `scoring/qualityGate.js` | `qualityReport`, `missingFields`, `warnings`, `executionStage` |
-| **4** | **`recollectMissingNode`** | Evaluator flags `recollectionRequired` as `true` (and attempts < 2). | `resolvedTicker`, `market`, `qualityReport` | `evidenceService.js` (Targeted targeted recall) | Updates `recollectionAttempts`, merges recovered elements, loops back |
+| **0** | **`validateInputNode`** | Graph start. | `inputCompanyName` | Standard validation regex rules | `warnings`, `executionStage` |
+| **1** | **`resolveCompanyNode`** | Input validation passes. | `inputCompanyName` | `evidenceService.js` $\rightarrow$ `companyResolver.js` | `resolvedTicker`, `resolvedName`, `market`, `executionStage` |
+| **2** | **`collectEvidenceNode`** | Autocomplete succeeds. | `resolvedTicker`, `resolvedName`, `market`, `recollectionAttempts` | `evidenceService.js` $\rightarrow$ `providerRouter.js` $\rightarrow$ `evidenceAggregator.js` | `profile`, `financials`, `news`, `marketContext`, `providerCoverage`, `fallbackHistory`, `recoveryHistory`, `executionStage` |
+| **3** | **`evaluateQualityNode`** | Primary fetch finishes. | `profile`, `financials`, `news` | `scoring/qualityGate.js` | `qualityReport`, `evidenceCompleteness`, `missingFields`, `warnings`, `executionStage` |
+| **4** | **`recollectMissingNode`** | Evaluator flags `recollectionRequired` as `true` (and attempts < 2). | `resolvedTicker`, `market`, `qualityReport` | `evidenceService.js` (Targeted recall) $\rightarrow$ `evidenceAggregator.js` | Updates `recollectionAttempts`, merges recovered elements, loops back |
 | **5** | **`computeScoresNode`** | Evaluator flags `recollectionRequired` as `false` (or attempts = 2). | `financials`, `marketContext` | Runs pure internal JS math (no files called) | `scores`, `executionStage` |
-| **6** | **`generateRecommendationNode`**| Scoring finishes. | `resolvedTicker`, `profile`, `scores`, `news` | `providers/llmRouter.js` | `recommendation`, `executionStage` |
+| **6** | **`generateRecommendationNode`**| Scoring finishes. | `resolvedTicker`, `profile`, `scores`, `news` | `providers/llmRouter.js` | `recommendation`, `executionStage` |tionStage` |
 

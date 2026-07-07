@@ -64,13 +64,13 @@ function reduceFallbackHistory(left, right) {
 }
 
 /**
- * Custom reducer to merge source references and their metadata keys.
+ * Custom reducer to merge provider coverage metadata logs.
  * 
- * @param {Record<string, Object>} [left] - Existing source map.
- * @param {Record<string, Object>} [right] - Incoming source changes to merge.
- * @returns {Record<string, Object>} Merged sources lookup object.
+ * @param {Record<string, Object>} [left] - Existing coverage.
+ * @param {Record<string, Object>} [right] - Incoming coverage changes to merge.
+ * @returns {Record<string, Object>} Merged coverage lookup object.
  */
-function reduceSources(left, right) {
+function reduceProviderCoverage(left, right) {
   return {
     ...(left || {}),
     ...(right || {})
@@ -123,8 +123,8 @@ const AgentStateAnnotation = Annotation.Root({
   marketContext: Annotation(),
 
   // Traceability & Validation Metadata
-  sources: Annotation({
-    reducer: reduceSources,
+  providerCoverage: Annotation({
+    reducer: reduceProviderCoverage,
     default: () => ({})
   }),
   fallbackHistory: Annotation({
@@ -147,6 +147,7 @@ const AgentStateAnnotation = Annotation.Root({
   // State Management & Control Flow
   executionStage: Annotation(),
   qualityReport: Annotation(),
+  evidenceCompleteness: Annotation(),
   recollectionAttempts: Annotation({
     reducer: (left, right) => (right !== undefined ? right : (left || 0)),
     default: () => 0
@@ -174,13 +175,14 @@ const createInitialState = (inputCompanyName) => {
     financials: null,
     news: [],
     marketContext: null,
-    sources: {},
+    providerCoverage: {},
     fallbackHistory: [],
     recoveryHistory: [],
     warnings: [],
     missingFields: [],
     executionStage: 'resolving company',
     qualityReport: null,
+    evidenceCompleteness: 0,
     recollectionAttempts: 0,
     scores: null,
     recommendation: null
@@ -193,7 +195,7 @@ module.exports = {
   reduceNews,
   reduceWarnings,
   reduceFallbackHistory,
-  reduceSources,
+  reduceProviderCoverage,
   reduceMissingFields,
   reduceRecoveryHistory
 };
