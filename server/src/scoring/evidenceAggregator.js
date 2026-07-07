@@ -4,6 +4,8 @@
  * Calculates deterministic confidence metrics and counts recovery operations.
  */
 
+const { evaluateQualityGate } = require('./qualityGate');
+
 /**
  * Calculates a deterministic confidence score based on data completeness and provider reliability.
  * 
@@ -13,21 +15,24 @@
 function calculateConfidence(state) {
   let score = 100;
 
-  // 1. Check Profile completeness
-  const profile = state.profile || {};
-  if (!profile.name) score -= 5;
-  if (!profile.sector || profile.sector === 'Unknown Sector') score -= 5;
-  if (!profile.marketCap || profile.marketCap === 0) score -= 10;
+  // Run the quality gate report to get true item-level completeness percentages
+  const report = evaluateQualityGate(state);
 
-  // 2. Check Financial statement missing fields
-  const financials = state.financials || {};
-  const income = financials.annualIncomeStatement || [];
-  const balance = financials.annualBalanceSheet || [];
-  const cash = financials.annualCashFlow || [];
+  // 1. Profile completeness penalty (deduct up to 20% proportional to missing fields)
+  if (report.profile < 80) {
+    score -= (100 - report.profile) * 0.20;
+  }
 
-  if (income.length === 0) score -= 15;
-  if (balance.length === 0) score -= 15;
-  if (cash.length === 0) score -= 15;
+  // 2. Financial statement completeness penalties (deduct up to 15% for each category)
+  if (report.incomeStatement < 80) {
+    score -= (100 - report.incomeStatement) * 0.15;
+  }
+  if (report.balanceSheet < 80) {
+    score -= (100 - report.balanceSheet) * 0.15;
+  }
+  if (report.cashFlow < 80) {
+    score -= (100 - report.cashFlow) * 0.15;
+  }
 
   // 3. Penalty for fallback providers used
   const recoveryHistory = state.recoveryHistory || [];
@@ -44,15 +49,12 @@ function calculateConfidence(state) {
   }
 
   // 4. News check
-  const news = state.news || [];
-  if (news.length === 0) {
+  if (report.news < 60) {
     score -= 10;
-  } else if (news.length < 3) {
-    score -= 5;
   }
 
-  // Enforce bounds
-  return Math.max(30, Math.min(100, score));
+  // Enforce boundaries
+  return Math.max(30, Math.min(100, Math.round(score)));
 }
 
 /**

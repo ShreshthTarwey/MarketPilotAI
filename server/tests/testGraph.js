@@ -2,7 +2,7 @@
  * testGraph.js
  * Standalone verification script for the Compiled LangGraph Orchestration Workflow.
  * Executes the complete state machine node sequence, conditional routing, and reporting.
- * Outputs detailed grouped audits, provider coverages, and deterministic confidence scores.
+ * Outputs detailed grouped audits, provider coverages, and intermediate valuations.
  */
 
 const graph = require('../src/agent/graph');
@@ -141,14 +141,14 @@ async function run() {
 
     // 6. SCORECARD
     console.log(`${colors.bold}==================================================${colors.reset}`);
-    console.log(`${colors.bold}${colors.cyan}6. QUANTITATIVE scorecards calculation${colors.reset}`);
+    console.log(`${colors.bold}${colors.cyan}6. QUANTITATIVE SCORECARDS${colors.reset}`);
     console.log(`${colors.bold}==================================================${colors.reset}`);
     if (finalState.scores) {
       console.log(`  Profitability Subscore: ${finalState.scores.profitabilityScore}/100`);
       console.log(`  Solvency Subscore: ${finalState.scores.solvencyScore}/100`);
       console.log(`  Momentum Subscore: ${finalState.scores.momentumScore}/100`);
       console.log(`  Overall Financial Score: ${colors.green}${finalState.scores.overallScore}/100${colors.reset}`);
-      console.log(`  Ratios:`);
+      console.log(`  Key Ratios:`);
       console.log(`    * Operating Margin: ${finalState.scores.ratios?.operatingMargin}%`);
       console.log(`    * Revenue Growth: ${finalState.scores.ratios?.revenueGrowth}%`);
       console.log(`    * Current Ratio: ${finalState.scores.ratios?.currentRatio}`);
@@ -159,6 +159,47 @@ async function run() {
     }
     console.log('');
 
+    // 6.5. DETERMINISTIC VALUATION ENGINE
+    console.log(`${colors.bold}==================================================${colors.reset}`);
+    console.log(`${colors.bold}${colors.cyan}6.5. DETERMINISTIC VALUATION ENGINE${colors.reset}`);
+    console.log(`${colors.bold}==================================================${colors.reset}`);
+    if (finalState.valuation) {
+      const val = finalState.valuation;
+      const im = val.intermediates || {};
+      
+      console.log(`  Current Trading Price: $${val.currentPrice?.toFixed(2) || 'N/A'}`);
+      console.log(`  Intrinsic DCF Fair Value: ${val.dcfValue ? `$${val.dcfValue.toFixed(2)}` : 'Not Calculated'}`);
+      console.log(`  Intrinsic Relative Multiples Value: ${val.relativeValue ? `$${val.relativeValue.toFixed(2)}` : 'Not Calculated'}`);
+      console.log(`  Intrinsic Consensus Blended Price: ${colors.green}$${val.consensusValue?.toFixed(2) || 'N/A'}${colors.reset}`);
+      console.log(`  Valuation Upside: ${val.upsidePercent > 0 ? `${colors.green}${val.upsidePercent}%${colors.reset}` : '0%'}`);
+      console.log(`  Valuation Downside: ${val.downsidePercent > 0 ? `${colors.red}${val.downsidePercent}%${colors.reset}` : '0%'}`);
+      console.log(`  Margin of Safety: ${val.marginOfSafety > 0 ? `${colors.green}${val.marginOfSafety}%${colors.reset}` : '0%'}`);
+      console.log(`  Quantitative Valuation Basis: ${colors.bold}${val.recommendationBasis}${colors.reset}`);
+      
+      console.log(`\n  Centralized Valuation Assumptions:`);
+      console.log(`    * Revenue Growth (Smoothed Avg): ${val.assumptions?.revenueGrowth}%`);
+      console.log(`    * Free Cash Flow Forecast Growth: ${val.assumptions?.freeCashFlowGrowth}%`);
+      console.log(`    * Perpetual Terminal Growth Rate: ${val.assumptions?.terminalGrowthRate}%`);
+      console.log(`    * Cost of Equity (CAPM): ${val.assumptions?.costOfEquity}%`);
+      console.log(`    * Forecast Horizon Length: ${val.assumptions?.forecastYears} Years`);
+      console.log(`    * Target Sector PE Benchmark Multiple: ${val.assumptions?.targetPE}`);
+      console.log(`    * Target Sector PB Benchmark Multiple: ${val.assumptions?.targetPB}`);
+      console.log(`    * Intrinsic Models Weight: ${val.assumptions?.dcfWeight}% DCF / ${val.assumptions?.multiplesWeight}% Multiples`);
+
+      console.log(`\n  Intermediate DCF Audit Trail Calculations:`);
+      console.log(`    * Base Free Cash Flow (FCF0): $${(im.fcfBase || 0).toLocaleString()}`);
+      console.log(`    * Projected Cash Flows (Years 1-5):`, im.projectedFcf?.map(f => `$${f.toLocaleString()}`) || []);
+      console.log(`    * Present Value of Projected FCFs:`, im.pvCashFlows?.map(f => `$${f.toLocaleString()}`) || []);
+      console.log(`    * Terminal Value (Year 5 Perpetual): $${(im.terminalValue || 0).toLocaleString()}`);
+      console.log(`    * Present Value of Terminal Value: $${(im.pvTerminalValue || 0).toLocaleString()}`);
+      console.log(`    * Total Present Value of Equity (PV): $${(im.totalPresentValue || 0).toLocaleString()}`);
+      console.log(`    * Comparable PE Multiple Value: ${im.peValue ? `$${im.peValue.toFixed(2)}` : 'N/A'}`);
+      console.log(`    * Comparable PB Multiple Value: ${im.pbValue ? `$${im.pbValue.toFixed(2)}` : 'N/A'}`);
+    } else {
+      console.log(`  Valuation calculations not completed.`);
+    }
+    console.log('');
+
     // 7. LLM RECOMMENDATION
     console.log(`${colors.bold}==================================================${colors.reset}`);
     console.log(`${colors.bold}${colors.cyan}7. LLM SYNTHESIS & REPORT${colors.reset}`);
@@ -166,7 +207,7 @@ async function run() {
     if (finalState.recommendation) {
       const rec = finalState.recommendation;
       console.log(`  Rating: ${colors.bold}${rec.rating === 'Buy' ? colors.green : rec.rating === 'Sell' ? colors.red : colors.yellow}${rec.rating}${colors.reset}`);
-      console.log(`  Target Price: ${rec.targetPrice !== null ? `$${rec.targetPrice}` : `${colors.yellow}Not Estimated (Pending deterministic valuation model)${colors.reset}`}`);
+      console.log(`  Target Price: ${rec.targetPrice !== null ? `$${rec.targetPrice}` : 'Not Estimated'}`);
       console.log(`  Deterministic Confidence: ${colors.green}${rec.confidenceScore}% (Calculated in JS)${colors.reset}`);
       console.log(`\n  Investment Thesis:\n    ${rec.investmentThesis}`);
       console.log(`\n  Risk Factors:`);

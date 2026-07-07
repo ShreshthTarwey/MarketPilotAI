@@ -2,7 +2,10 @@
  * computeScores.js
  * Graph node responsible for running deterministic quantitative scorecard calculations.
  * Strictly executes pure JavaScript financial math; contains zero LLM calls.
+ * Integrates mathematical DCF and relative multiples valuation models to calculate consensus targetPrice.
  */
+
+const { compileValuationReport } = require('../../scoring/valuationCalculator');
 
 /**
  * Helper to calculate growth rate between two values.
@@ -16,7 +19,7 @@ function calculateGrowth(current, previous) {
  * Node function to evaluate solvency, profitability, and momentum scorecards.
  * 
  * @param {Object} state - The current LangGraph state.
- * @returns {Promise<Partial<import('../state').AgentState>>} Calculated scorecards.
+ * @returns {Promise<Partial<import('../state').AgentState>>} Calculated scorecards and valuations.
  */
 async function computeScoresNode(state) {
   console.log(`[Graph Node]: Executing computeScoresNode`);
@@ -118,11 +121,22 @@ async function computeScoresNode(state) {
     (momentumScore * 0.2)
   );
 
+  // 5. Calculate intrinsic consensus valuation and compile a rich report (Phase 4 Refinement)
+  const currentPrice = priceHistory.length > 0 ? priceHistory[0].close : null;
+  const valuation = compileValuationReport(
+    financials,
+    state.profile,
+    currentPrice,
+    revenueGrowth,
+    debtToEquity
+  );
+
   const scores = {
     profitabilityScore,
     solvencyScore,
     momentumScore,
     overallScore,
+    targetPrice: valuation.consensusValue,
     ratios: {
       operatingMargin: parseFloat(operatingMargin.toFixed(2)),
       revenueGrowth: parseFloat(revenueGrowth.toFixed(2)),
@@ -132,10 +146,11 @@ async function computeScoresNode(state) {
     }
   };
 
-  console.log(`[Graph Node]: Quantitative scores calculated. Overall scorecard: ${overallScore}/100`);
+  console.log(`[Graph Node]: Quantitative scores calculated. Blended Valuation: ${valuation.consensusValue ? `$${valuation.consensusValue}` : 'N/A'}. Overall scorecard: ${overallScore}/100`);
 
   return {
     scores,
+    valuation, // Writes directly to valuation state annotation channel
     executionStage: 'generating recommendation'
   };
 }

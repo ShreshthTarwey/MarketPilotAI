@@ -155,6 +155,7 @@ const AgentStateAnnotation = Annotation.Root({
 
   // Analytical Outputs
   scores: Annotation(),
+  valuation: Annotation(),
   recommendation: Annotation()
 });
 
@@ -185,6 +186,7 @@ const createInitialState = (inputCompanyName) => {
     evidenceCompleteness: 0,
     recollectionAttempts: 0,
     scores: null,
+    valuation: null,
     recommendation: null
   };
 };
