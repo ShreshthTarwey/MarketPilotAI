@@ -9,6 +9,8 @@ const cors = require('cors');
 const env = require('./src/config/env');
 const graph = require('./src/agent/graph');
 const { createInitialState } = require('./src/agent/state');
+const CompanyResolver = require('./src/providers/implementations/companyResolver');
+const { handle404, globalErrorHandler } = require('./src/config/errorHandler');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -26,11 +28,34 @@ app.get('/health', (req, res) => {
 });
 
 /**
+ * Company Resolution Endpoint.
+ * Resolves a company search query to a normalized stock ticker before triggering research.
+ */
+app.get('/api/resolve', async (req, res, next) => {
+  const query = req.query.company || req.query.query;
+
+  if (!query || typeof query !== 'string' || !query.trim()) {
+    return res.status(400).json({
+      error: 'Invalid Request',
+      message: 'Query parameter "company" or "query" is required.'
+    });
+  }
+
+  try {
+    const resolver = new CompanyResolver();
+    const result = await resolver.resolve(query.trim());
+    return res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * Core Research API Endpoint.
  * Executes the LangGraph state machine orchestration.
  * Supports both GET queries and POST body payloads.
  */
-app.all('/api/research', async (req, res) => {
+app.all('/api/research', async (req, res, next) => {
   // Extract company name from query params or POST body
   const companyQuery = req.query.company || req.body.company;
 
@@ -88,15 +113,13 @@ app.all('/api/research', async (req, res) => {
     });
 
   } catch (error) {
-    console.error(`[API Error]: Execution failed for "${normalizedQuery}":`, error.stack);
-    
-    return res.status(500).json({
-      error: 'Internal Server Error',
-      message: 'The research orchestrator failed during execution.',
-      details: error.message
-    });
+    next(error);
   }
 });
+
+// Register Error and 404 Handler Middlewares
+app.use(handle404);
+app.use(globalErrorHandler);
 
 // Run server listener
 app.listen(PORT, () => {

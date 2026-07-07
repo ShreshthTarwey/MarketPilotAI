@@ -142,9 +142,39 @@ Implemented cache singleton, ticker autocompletes, Tavily search connectors, SEC
 ### Phase 3: LangGraph Orchestration Layer (Complete)
 Built the service layer, single-responsibility nodes, input validation, evidence aggregator diagnostics, compiled StateGraph with conditional routing, and verification tests.
 
-### Phase 4: Deterministic Scoring & Valuations (In Progress)
+### Phase 4: Deterministic Scoring & Valuations (Complete)
 
 We have built a fully transparent, configurable, and mathematically explainable **Consensus Valuation Engine** in JavaScript. The implementation separates core formulas from LLM interpretation, ensuring that numerical accuracy is fully preserved in code while the LLM focuses entirely on qualitative analysis.
+
+#### A. Phase 4 Files & Usages
+The following files were created or modified to implement the financial scoring and deterministic valuation pipeline:
+
+1.  **[`server/src/config/valuationConfig.js`](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/config/valuationConfig.js) [NEW]**
+    *   **Usage:** Declares baseline macro settings (risk-free rate, market risk premium, forecast years, and terminal perpetual growth) alongside sector multiples tables (prepared for P/E, P/B, EV/EBITDA, P/S) and consensus blending weights.
+    *   **Pipeline Position:** Loaded by the valuation library at execution time to set policy rules.
+2.  **[`server/src/scoring/valuationCalculator.js`](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/scoring/valuationCalculator.js) [NEW]**
+    *   **Usage:** Contains the core mathematical modeling engines:
+        *   *CAPM Cost of Equity:* Solves $\beta_L$ using balance sheet leverage, then applies CAPM.
+        *   *Smoothed Growth Average:* Averages YoY growths and applies linear compression to eliminate spikes.
+        *   *5-Year DCF:* Projects FCF, discounts using Cost of Equity ($K_e$), and solves intrinsic fair price keylessly.
+        *   *Relative Multiples:* Multiplies earnings and book equity by sector benchmarks.
+        *   *Consensus Blender:* Averages DCF (60%) and Comps (40%).
+    *   **Pipeline Position:** Invoked by `computeScoresNode` to perform quantitative valuation.
+3.  **[`server/src/agent/state.js`](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/agent/state.js) [MODIFY]**
+    *   **Usage:** Added the rich `valuation` state channel and schema to store raw consensus prices, upside margins of safety, assumptions, and intermediate calculation arrays.
+    *   **Pipeline Position:** Defines the shared data schema passed between LangGraph nodes.
+4.  **[`server/src/agent/nodes/computeScores.js`](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/agent/nodes/computeScores.js) [MODIFY]**
+    *   **Usage:** Extracts the resolved financial history, invokes `valuationCalculator.compileValuationReport()`, and updates the graph state with the rich valuation payload.
+    *   **Pipeline Position:** Executed directly after the targeted recollection nodes check out of quality gates.
+5.  **[`server/src/agent/nodes/generateRecommendation.js`](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/agent/nodes/generateRecommendation.js) [MODIFY]**
+    *   **Usage:** Injects the current trading price, consensus target price, and the rich intermediate assumptions into the LLM synthesis prompt template, forcing prompt constraints that restrict the LLM from inventing numerical scores.
+    *   **Pipeline Position:** The final node of the StateGraph before compile output.
+6.  **[`server/src/scoring/evidenceAggregator.js`](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/scoring/evidenceAggregator.js) [MODIFY]**
+    *   **Usage:** Realigned `calculateConfidence` to query the program's stateless `evaluateQualityGate` report, ensuring that empty balance sheet elements correctly decrease the deterministic confidence percentage (e.g. dropping to 60% for partial filings).
+    *   **Pipeline Position:** Invoked inside `collectEvidenceNode` and `recollectMissingNode` to audit data quality.
+7.  **[`server/tests/testGraph.js`](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/tests/testGraph.js) [MODIFY]**
+    *   **Usage:** Added diagnostic sections rendering the base FCF, projected arrays, terminal values, present values, and multiple valuations to verify all mathematical formulas.
+    *   **Pipeline Position:** Terminal test CLI runner.
 
 ---
 
@@ -360,8 +390,33 @@ These parameters are set globally in [`valuationConfig.js`](file:///c:/Users/Asu
 
 ---
 
-### Phase 5: LLM Synthesis & API (Upcoming)
-Expose the orchestration graph via Express REST endpoints, integrate error handlers, and refine reasoning synthesis prompts.
+### Phase 5: LLM Synthesis & REST API (Complete)
+
+We have exposed our Compiled LangGraph Orchestrator to external clients via an Express REST API server. 
+
+#### A. API Endpoints Scaffolding
+The API server is hosted on port `5000` (configurable via `PORT` environment variables) and implements two main endpoints:
+
+1.  **`GET /api/resolve` (Company Resolution)**
+    *   *Purpose:* Translates a search string (e.g. `"Tata"` or `"Apple"`) into a verified ticker symbol (e.g. `"TCS.NS"` or `"AAPL"`).
+    *   *Usage:* Used by the frontend search input bar to retrieve autocomplete recommendations and display validation states before initiating research.
+2.  **`GET/POST /api/research` (Core Graph Orchestrator)**
+    *   *Purpose:* Accepts a company query, compiles the initial graph state, executes all collector, validator, recollection, scoring, and recommendation nodes, and returns the final normalized JSON report payload.
+    *   *Payload Structure:* Returns `{ success: true, data: { resolvedIdentity, profile, financials, news, scores, valuation, recommendation, qualityReport, warnings } }`.
+
+#### B. Centralized Error & 404 Middleware
+Error handling is centralized inside [`server/src/config/errorHandler.js`](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/config/errorHandler.js):
+*   **Route Interceptor (`handle404`):** Catches invalid path requests and returns a clean, structured JSON 404 response.
+*   **Global Exception Catcher (`globalErrorHandler`):** Intercepts internal exceptions (unhandled promise rejections, database drops) and returns a JSON 500 response.
+*   **Rate Limit Auditing:** Automatically audits error messages for `"rate limit"` text or `429` status codes. If detected, it returns a friendly JSON response instructing the user to wait, preventing frontend crashes.
+
+#### C. LLM Reasoning & Prompt Constraints
+Inside [`generateRecommendation.js`](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/agent/nodes/generateRecommendation.js), the LLM prompt templates have been strictly constrained to act as **Qualitative Synthesizers**:
+1.  **Mathematical Integrity:** Injects the exact numerical outputs (e.g. Operating Margin, Debt-to-Equity, CAPM Cost of Equity, Fair Consensus DCF values, and margins of safety) directly into the prompt.
+2.  **Strict Limits:** Explicitly instructs the LLM not to invent, override, or calculate any quantitative parameters. It must read the exact numbers provided.
+3.  **Logical Consistency:** Forces the LLM to output its recommendation rating (Buy/Hold/Sell) and target price matching the deterministic consensus fair price, ensuring that the qualitative thesis does not contradict the math.
+
+---
 
 ### Phase 6: React Frontend Dashboard (Upcoming)
 Create an interactive dashboard showcasing score visuals, citation overlays, recovery logs, and pdf exports.

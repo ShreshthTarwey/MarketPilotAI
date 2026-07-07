@@ -58,7 +58,7 @@ ${profile.description || 'N/A'}
 - Valuation Downside: ${valuation.downsidePercent}%
 - Margin of Safety Calculated: ${valuation.marginOfSafety}%
 - Quantitative Recommendation Basis: ${valuation.recommendationBasis}
-- WACC / Cost of Equity used in DCF: ${valuation.assumptions?.discountRate}%
+- Cost of Equity used in DCF: ${valuation.assumptions?.costOfEquity}%
 - FCF Growth rate projected in DCF: ${valuation.assumptions?.freeCashFlowGrowth}%
 - Sector PE Multiplier used: ${valuation.assumptions?.targetPE}
 
