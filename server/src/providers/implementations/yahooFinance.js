@@ -119,6 +119,7 @@ class YahooFinanceProvider extends IFinancialDataProvider {
       industry: profile.industry || 'Unknown Industry',
       description: profile.longBusinessSummary || 'No description available.',
       marketCap: this._val(detail.marketCap || price.marketCap),
+      currentPrice: this._val(price.regularMarketPrice || detail.previousClose),
       country: profile.country || 'Unknown Country',
       website: profile.website || 'No website available.'
     };

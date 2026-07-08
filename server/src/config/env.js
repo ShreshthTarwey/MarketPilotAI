@@ -10,6 +10,9 @@ const path = require('path');
 // Load environment variables from .env file
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
+// Disable TLS validation check to prevent fetch failures behind corporate proxy/firewalls
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
 const config = {
   port: parseInt(process.env.PORT || '5000', 10),
   env: process.env.NODE_ENV || 'development',

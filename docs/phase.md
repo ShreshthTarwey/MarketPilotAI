@@ -418,6 +418,72 @@ Inside [`generateRecommendation.js`](file:///c:/Users/Asus/Desktop/MarketPilotAI
 
 ---
 
-### Phase 6: React Frontend Dashboard (Upcoming)
-Create an interactive dashboard showcasing score visuals, citation overlays, recovery logs, and pdf exports.
+### Phase 6: React Frontend Dashboard (Design Phase)
+
+We have created the visual design system and landing page wireframe for **MarketPilot AI** using Stitch. 
+
+---
+
+#### A. Design Language & Tokens
+*   **Aesthetic Style:** Ultra-minimalist dark mode, borrowing design details from Vercel, Linear, and Perplexity.
+*   **Colors:** Deep black backgrounds (`#0a0a0a`), subtle gray borders (`#1f1f1f`), sharp white primary elements (`#ffffff`), and medium gray secondary texts. No bright neon colors, no crypto gradients, and no glassmorphism to preserve institutional trust.
+*   **Typography:** Premium sans-serif fonts (Geist/Inter scale) with generous line heights and tight letter spacing.
+*   **Shapes:** Flat cards with soft corner roundings (`ROUND_EIGHT`) and light gray borders.
+
+---
+
+#### B. Component Lay-out Architecture
+
+##### 1. Navigation Header
+*   *Brand:* MarketPilot AI logo (bold monospace).
+*   *Links:* Pricing, Documentation, GitHub repository.
+*   *Action:* "Get Started" button (high-contrast flat monochrome).
+
+##### 2. Search Hero Section
+*   *Title:* "MarketPilot AI" (massive Geist bold).
+*   *Subtitle:* "Institutional-grade stock research powered by deterministic finance and explainable AI."
+*   *Interaction:* A centered, full-width search input bar. Triggers pre-flight `/api/resolve` queries dynamically to validate target companies before search.
+*   *Pills:* Quick links for popular searches under the bar: `Apple (AAPL)`, `Microsoft (MSFT)`, `Tata Consultancy (TCS.NS)`.
+
+##### 3. How It Works (6-Card Horizontal Flow)
+Six cards illustrate the sequential steps in our LangGraph pipeline:
+1.  **Resolve:** Fuzzy search queries resolved to official tickers.
+2.  **Collect:** Concurrent financial, news, and price history fetches.
+3.  **Validate:** Diagnostic Quality Gate completeness check.
+4.  **Score:** Programmatic Profitability, Solvency, and Momentum subscores.
+5.  **Value:** Solvency-levered Beta Cost of Equity CAPM and 5-Year DCF calculations.
+6.  **Explain:** LLM qualitative synthesis and investment thesis generation.
+
+##### 4. Why MarketPilot AI (6-Card Feature Grid)
+Highlights our product's core engineering principles:
+*   *Deterministic Valuation:* Core math solved in JS, preventing LLMs from inventing targets.
+*   *Evidence Quality Gate:* Programmatic check stops incomplete data from skewing calculations.
+*   *LangGraph Agent:* Stateful, loops-guarding, and self-recollecting graph workflow.
+*   *Multi-source Evidence:* Combines Yahoo Finance, SEC Edgar, and Tavily search.
+*   *Explainable AI:* The LLM explains numbers, it does not invent them.
+*   *Transparent Calculations:* All intermediate arrays and assumptions are exposed.
+
+##### 5. Architecture Preview Container
+*   *Embed:* Centered technical workflow diagram illustrating how requests are received, parsed, scored, and returned.
+
+##### 6. Interactive Analysis Dashboard UI (Completed)
+When a search completes, the interface splits into a premium metrics report:
+*   **Top Bar:** Resolved company ticker, sector, industry, and market context with color-coded rating badges (Buy/Hold/Sell).
+*   **Evidence Quality Gate Card:** Completeness score progress bar with warnings/missing details list.
+*   **Ratios Grid:** Circular SVG radial progress gauges for Profitability (Operating Margin, Revenue Growth) and Solvency (Debt-to-Equity, Current Ratio), plus momentum trend subscores.
+*   **Valuation Model Matrix:** Comparable columns comparing the 5-Year DCF fair price and Comps multiples price, blending percentages (60% / 40%), and Margin of Safety discount banners.
+*   **FCF Table:** Detailed spreadsheet rows rendering $FCF_0$, 5 projected years, Discount Factors, Present Values, and perpetual Terminal Values.
+*   **LLM Synthesis Thesis Card:** Human-readable qualitative explanation, bulleted risks, and deterministic confidence rating.
+
+##### 7. Live Log Console Loader Component (Completed)
+To prevent blank loading states, we built a custom loading console overlay:
+*   **Geometric SVG Loader:** A dashed ring rotating via CSS keyframe animations.
+*   **Pipeline Status Stream:** A terminal-like live console feed that prints active node logging messages (e.g. `[RESOLVER] Bound resolved identity details`, `[SCORING ENGINE] Computing Solvency and Profitability subscores...`).
+*   **Progress Ticker:** A smooth running percentage indicator (0% to 100%).
+
+##### 8. Corporate SSL Proxy Bypass & Fallbacks (Completed)
+*   **Bypassing SSL Blocks:** Configured `process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'` in `env.js` to ensure the application successfully connects behind decrypting proxy firewalls (such as Sophos Intercept).
+*   **Price Fallback Ingestion:** Modified `computeScores.js` to read the real-time stock price from `price.regularMarketPrice` in the QuoteSummary bundle if the Stooq/Yahoo Chart API fails, preventing valuation collapses on rate-limited or newly listed stock queries.
+
+---
 

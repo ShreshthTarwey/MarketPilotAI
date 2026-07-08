@@ -122,7 +122,7 @@ async function computeScoresNode(state) {
   );
 
   // 5. Calculate intrinsic consensus valuation and compile a rich report (Phase 4 Refinement)
-  const currentPrice = priceHistory.length > 0 ? priceHistory[0].close : null;
+  const currentPrice = (priceHistory.length > 0 ? priceHistory[0].close : null) || state.profile?.currentPrice || null;
   const valuation = compileValuationReport(
     financials,
     state.profile,
