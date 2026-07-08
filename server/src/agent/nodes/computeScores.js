@@ -6,6 +6,7 @@
  */
 
 const { compileValuationReport } = require('../../scoring/valuationCalculator');
+const valuationConfig = require('../../config/valuationConfig');
 
 /**
  * Helper to calculate growth rate between two values.
@@ -22,6 +23,10 @@ function calculateGrowth(current, previous) {
  * @returns {Promise<Partial<import('../state').AgentState>>} Calculated scorecards and valuations.
  */
 async function computeScoresNode(state) {
+  if (!state.resolvedTicker) {
+    console.log(`[Graph Node]: Skipping computeScoresNode due to missing resolved ticker.`);
+    return { executionStage: 'scoring bypassed' };
+  }
   console.log(`[Graph Node]: Executing computeScoresNode`);
 
   const financials = state.financials || {};
@@ -113,15 +118,7 @@ async function computeScoresNode(state) {
     }
   }
 
-  // 4. Calculate weighted overall score
-  // Profitability (40%), Solvency (40%), Momentum (20%)
-  const overallScore = Math.round(
-    (profitabilityScore * 0.4) +
-    (solvencyScore * 0.4) +
-    (momentumScore * 0.2)
-  );
-
-  // 5. Calculate intrinsic consensus valuation and compile a rich report (Phase 4 Refinement)
+  // 4. Calculate Intrinsic Consensus Valuation and compile a rich report (Phase 4 Refinement)
   const currentPrice = (priceHistory.length > 0 ? priceHistory[0].close : null) || state.profile?.currentPrice || null;
   const valuation = compileValuationReport(
     financials,
@@ -131,12 +128,165 @@ async function computeScoresNode(state) {
     debtToEquity
   );
 
+  // 5. Multi-Factor Score Calculations (0-100 scales)
+  
+  // A. Valuation Score (continuous scale based on target price upside/downside)
+  let valuationScore = null;
+  if (valuation.consensusValue && currentPrice) {
+    const upside = (valuation.consensusValue - currentPrice) / currentPrice;
+    if (upside > 0) {
+      valuationScore = Math.round(50 + Math.min(50, (upside / 0.30) * 50)); // +30% upside maps to 100
+    } else {
+      const downside = Math.abs(upside);
+      valuationScore = Math.round(50 - Math.min(50, (downside / 0.30) * 50)); // -30% downside maps to 0
+    }
+  }
+
+  // B. Financials Score (Average of Profitability and Solvency scorecards)
+  const financialsScore = Math.round((profitabilityScore + solvencyScore) / 2);
+
+  // C. Momentum Score (Trend Strength)
+  let momentumFactorScore = 50;
+  if (priceTrend === 'Bullish') momentumFactorScore = 90;
+  else if (priceTrend === 'Bearish') momentumFactorScore = 20;
+  else if (priceTrend === 'Sideways') momentumFactorScore = 60;
+
+  // D. News Sentiment Score (Weighted by classified materiality)
+  const newsList = state.news || [];
+  let newsScore = 50;
+  if (newsList.length > 0) {
+    let scoreSum = 0;
+    let weightSum = 0;
+    for (const article of newsList) {
+      let sentimentVal = 0;
+      if (article.sentiment === 'positive') sentimentVal = 1;
+      else if (article.sentiment === 'negative') sentimentVal = -1;
+
+      let materialityVal = 1;
+      if (article.materiality === 'high') materialityVal = 3;
+      else if (article.materiality === 'medium') materialityVal = 2;
+
+      scoreSum += sentimentVal * materialityVal;
+      weightSum += materialityVal;
+    }
+    if (weightSum > 0) {
+      const netSentiment = scoreSum / weightSum;
+      newsScore = Math.round(50 + (netSentiment * 50));
+    }
+  }
+
+  // E. Safety Score (Deduct penalties based on active risk engine metrics)
+  let rawSafetyScore = 100;
+  const safetyPenalties = [];
+
+  if (debtToEquity > 2.0) {
+    rawSafetyScore -= 30;
+    safetyPenalties.push("High Leverage (D/E > 2.0): -30");
+  }
+  if (currentRatio < 1.0) {
+    rawSafetyScore -= 30;
+    safetyPenalties.push("Weak Liquidity (Current Ratio < 1.0): -30");
+  }
+  // Check if base free cash flow is negative or zero
+  const cashFlowList = financials.annualCashFlow || [];
+  const latestCF = cashFlowList[0];
+  const fcfBase = latestCF ? (latestCF.freeCashFlow || (latestCF.operatingCashFlow + (latestCF.capitalExpenditures || 0))) : 0;
+  if (fcfBase <= 0) {
+    rawSafetyScore -= 20;
+    safetyPenalties.push("Negative Free Cash Flow: -20");
+  }
+  if (operatingMargin < 0) {
+    rawSafetyScore -= 20;
+    safetyPenalties.push("Negative Operating Margin: -20");
+  }
+  if (revenueGrowth < 0) {
+    rawSafetyScore -= 20;
+    safetyPenalties.push("Negative Revenue Growth: -20");
+  }
+  if (priceTrend === 'Bearish') {
+    rawSafetyScore -= 15;
+    safetyPenalties.push("Bearish Price Trend: -15");
+  }
+  const safetyScore = Math.max(10, Math.min(100, rawSafetyScore));
+
+  // 6. Weighted Consolidation & Dynamic Weights Normalization
+  const w = valuationConfig.multiFactorWeights || {
+    valuation: 0.30,
+    financials: 0.30,
+    momentum: 0.15,
+    news: 0.10,
+    risk: 0.15
+  };
+
+  let weightedSum = 0;
+  let activeWeightsSum = 0;
+
+  if (valuationScore !== null) {
+    weightedSum += valuationScore * w.valuation;
+    activeWeightsSum += w.valuation;
+  }
+  weightedSum += financialsScore * w.financials;
+  activeWeightsSum += w.financials;
+  weightedSum += momentumFactorScore * w.momentum;
+  activeWeightsSum += w.momentum;
+  weightedSum += newsScore * w.news;
+  activeWeightsSum += w.news;
+  weightedSum += safetyScore * w.risk;
+  activeWeightsSum += w.risk;
+
+  const baseOverallScore = Math.round(weightedSum / activeWeightsSum);
+
+  // 6.5. Calculate Proportional News Catalyst Modifier
+  let newsModifier = 0;
+  if (newsList.length > 0) {
+    for (const article of newsList) {
+      let sentimentVal = 0;
+      if (article.sentiment === 'positive') sentimentVal = 1;
+      else if (article.sentiment === 'negative') sentimentVal = -1;
+
+      let materialityVal = 1;
+      if (article.materiality === 'high') materialityVal = 3;
+      else if (article.materiality === 'medium') materialityVal = 2;
+
+      // Proportional news impact: scales directly with both sentiment and materiality
+      newsModifier += sentimentVal * (materialityVal / 3) * 6;
+    }
+    // Clamp news modifier to [-15, 10] range
+    newsModifier = Math.max(-15, Math.min(10, Math.round(newsModifier)));
+  }
+
+  // Consolidated overall score including proportional news adjustment
+  let overallScore = Math.max(10, Math.min(100, baseOverallScore + newsModifier));
+
+  // 6.7. Risk/Safety Override Constraint
+  // If the Safety Score is under 40 (critical distress/solvency risk), cap the overall score at 39 (SELL rating)
+  // to protect against catastrophic cash-burn and restructuring risk.
+  if (safetyScore < 40) {
+    overallScore = Math.min(39, overallScore);
+  }
+
+  // Deterministic Rating Mapping
+  let rating = 'Hold';
+  if (overallScore >= 65) rating = 'Buy';
+  else if (overallScore < 40) rating = 'Sell';
+
   const scores = {
     profitabilityScore,
     solvencyScore,
-    momentumScore,
+    momentumScore: momentumFactorScore,
     overallScore,
     targetPrice: valuation.consensusValue,
+    breakdown: {
+      valuationScore,
+      financialsScore,
+      momentumScore: momentumFactorScore,
+      newsScore,
+      newsModifier,
+      safetyScore,
+      safetyPenalties,
+      overallScore,
+      rating
+    },
     ratios: {
       operatingMargin: parseFloat(operatingMargin.toFixed(2)),
       revenueGrowth: parseFloat(revenueGrowth.toFixed(2)),
@@ -146,11 +296,12 @@ async function computeScoresNode(state) {
     }
   };
 
-  console.log(`[Graph Node]: Quantitative scores calculated. Blended Valuation: ${valuation.consensusValue ? `$${valuation.consensusValue}` : 'N/A'}. Overall scorecard: ${overallScore}/100`);
+  console.log(`[Graph Node]: Multi-factor rating resolved: ${rating.toUpperCase()} (Score: ${overallScore}/100)`);
+  console.log(`[Graph Node]: Factor breakdown: Valuation: ${valuationScore ?? 'N/A'}, Financials: ${financialsScore}, News: ${newsScore}, Safety: ${safetyScore}`);
 
   return {
     scores,
-    valuation, // Writes directly to valuation state annotation channel
+    valuation,
     executionStage: 'generating recommendation'
   };
 }

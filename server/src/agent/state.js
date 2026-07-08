@@ -46,8 +46,32 @@ function reduceNews(left, right) {
  */
 function reduceWarnings(left, right) {
   const existing = left || [];
-  const incoming = right || [];
-  return [...existing, ...incoming];
+  let incoming = right || [];
+  
+  const shouldClear = incoming.some(w => w && w.code === 'CLEAR_MISSING_FIELDS');
+  let base = existing;
+  
+  if (shouldClear) {
+    base = existing.filter(w => w && w.code !== 'MISSING_FIELD');
+    incoming = incoming.filter(w => w && w.code !== 'CLEAR_MISSING_FIELDS');
+  }
+  
+  const combined = [...base, ...incoming];
+  
+  // De-duplicate by message
+  const unique = [];
+  const seenMessages = new Set();
+  for (const item of combined) {
+    if (item && item.message) {
+      if (!seenMessages.has(item.message)) {
+        seenMessages.add(item.message);
+        unique.push(item);
+      }
+    } else if (item) {
+      unique.push(item);
+    }
+  }
+  return unique;
 }
 
 /**
@@ -112,6 +136,7 @@ const AgentStateAnnotation = Annotation.Root({
   resolvedTicker: Annotation(),
   resolvedName: Annotation(),
   market: Annotation(),
+  resolutionConfidence: Annotation(),
 
   // Core Evidence Fields
   profile: Annotation(),
@@ -172,6 +197,7 @@ const createInitialState = (inputCompanyName) => {
     resolvedTicker: '',
     resolvedName: '',
     market: 'Global',
+    resolutionConfidence: 0.0,
     profile: null,
     financials: null,
     news: [],

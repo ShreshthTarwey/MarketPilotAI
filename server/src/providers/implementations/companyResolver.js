@@ -7,6 +7,47 @@
 
 const cache = require('../cache/memoryCache');
 const LLMRouter = require('../llmRouter');
+const valuationConfig = require('../../config/valuationConfig');
+
+function getLevenshteinDistance(a, b) {
+  const matrix = [];
+  for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        );
+      }
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
+function calculateSimilarity(s1, s2) {
+  const a = s1.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const b = s2.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (a.length === 0 || b.length === 0) return 0;
+  if (a === b) return 1.0;
+  
+  // Acronym/abbreviation check (e.g. "TCS" for "Tata Consultancy Services")
+  const words = s2.toLowerCase().split(/\s+/).map(w => w.replace(/[^a-z0-9]/g, '')).filter(w => !!w);
+  if (words.length > 1) {
+    const acronym = words.map(w => w[0]).join('');
+    if (acronym.includes(a) || a.includes(acronym)) {
+      return 0.95;
+    }
+  }
+  
+  const distance = getLevenshteinDistance(a, b);
+  const maxLength = Math.max(a.length, b.length);
+  return 1.0 - (distance / maxLength);
+}
 
 class CompanyResolver {
   /**
@@ -131,6 +172,7 @@ class CompanyResolver {
           name: topMatch.shortname || topMatch.longname || topMatch.symbol,
           exchange: this._normalizeExchange(topMatch.exchange),
           market: this._resolveMarket(topMatch.exchange, topMatch.symbol),
+          resolutionConfidence: 1.0,
           suggestions: []
         };
         cache.set(cacheKey, result);
@@ -170,7 +212,18 @@ Do not return any surrounding text. Do not invent symbols. Suggest only real pub
       const candidateSymbol = item.ticker;
       if (!candidateSymbol) continue;
 
-      console.log(`[Company Resolver]: Verifying LLM suggested ticker "${candidateSymbol}"`);
+      // Compute similarity match score to prevent LLM hallucinations on numeric or garbage inputs
+      const nameSim = item.name ? calculateSimilarity(query, item.name) : 0;
+      const tickerSim = candidateSymbol ? calculateSimilarity(query, candidateSymbol) : 0;
+      const similarity = Math.max(nameSim, tickerSim);
+      const minSim = valuationConfig.resolutionMinSimilarity || 0.70;
+
+      if (similarity < minSim) {
+        console.log(`[Company Resolver]: Skipping LLM suggestion "${item.name || candidateSymbol}" due to low similarity confidence: ${(similarity * 100).toFixed(1)}%`);
+        continue;
+      }
+
+      console.log(`[Company Resolver]: Verifying LLM suggested ticker "${candidateSymbol}" (Similarity: ${(similarity * 100).toFixed(1)}%)`);
       const verifyQuotes = await this._queryYahooSearch(candidateSymbol);
 
       if (verifyQuotes && verifyQuotes.length > 0) {
@@ -186,12 +239,26 @@ Do not return any surrounding text. Do not invent symbols. Suggest only real pub
             name: topVerifyMatch.shortname || topVerifyMatch.longname || topVerifyMatch.symbol,
             exchange: this._normalizeExchange(topVerifyMatch.exchange),
             market: this._resolveMarket(topVerifyMatch.exchange, topVerifyMatch.symbol),
+            resolutionConfidence: parseFloat(similarity.toFixed(2)),
             suggestions: []
           };
           console.log(`[Company Resolver]: LLM suggested ticker "${candidateSymbol}" successfully verified.`);
           cache.set(cacheKey, verifiedResult);
           return verifiedResult;
         }
+      } else if (verifyQuotes === null && similarity >= 0.90) {
+        console.log(`[Company Resolver]: Yahoo Search validation is offline. Accepting high-confidence LLM candidate "${candidateSymbol}" directly.`);
+        const verifiedResult = {
+          success: true,
+          ticker: candidateSymbol.toUpperCase(),
+          name: item.name || candidateSymbol.toUpperCase(),
+          exchange: 'Global',
+          market: 'Global',
+          resolutionConfidence: parseFloat(similarity.toFixed(2)),
+          suggestions: []
+        };
+        cache.set(cacheKey, verifiedResult);
+        return verifiedResult;
       }
 
       if (item.name) {
@@ -213,6 +280,7 @@ Do not return any surrounding text. Do not invent symbols. Suggest only real pub
       name: null,
       exchange: null,
       market: 'Global',
+      resolutionConfidence: 0.0,
       suggestions: finalSuggestions,
       warning: `Could not resolve company symbol for "${query}".`
     };

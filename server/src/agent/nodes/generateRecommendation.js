@@ -16,6 +16,19 @@ const llm = new LLMRouter();
  * @returns {Promise<Partial<import('../state').AgentState>>} The recommendation object.
  */
 async function generateRecommendationNode(state) {
+  if (!state.resolvedTicker) {
+    console.log(`[Graph Node]: Skipping generateRecommendationNode due to missing resolved ticker.`);
+    return {
+      recommendation: {
+        rating: 'Hold',
+        targetPrice: null,
+        investmentThesis: 'Resolution failed. No company selected.',
+        risks: [],
+        confidenceScore: 0
+      },
+      executionStage: 'completed'
+    };
+  }
   console.log(`[Graph Node]: Executing generateRecommendationNode`);
 
   const ticker = state.resolvedTicker;
@@ -26,11 +39,12 @@ async function generateRecommendationNode(state) {
   const valuation = state.valuation || {};
 
   // Calculate the deterministic confidence score in JavaScript (not the LLM)
+  const breakdown = scores.breakdown || {};
   const confidenceScore = calculateConfidence(state);
 
-  // Construct a summary of recent articles for prompt context
+  // Construct a summary of recent articles for prompt context including sentiment/materiality
   const newsSummary = news.slice(0, 5).map(article => 
-    `- [${article.source}] ${article.title}: ${article.summary}`
+    `- [${article.source}] (Sentiment: ${article.sentiment}, Materiality: ${article.materiality}) ${article.title}: ${article.summary || article.snippet}`
   ).join('\n');
 
   const prompt = `
@@ -43,11 +57,14 @@ Do NOT attempt to recalculate, modify, or invent any of these numbers:
 1. Company Description:
 ${profile.description || 'N/A'}
 
-2. Quantitative Financial Scorecard:
-- Overall Financial Score: ${scores.overallScore}/100
-- Profitability Subscore: ${scores.profitabilityScore}/100 (Operating Margin: ${scores.ratios?.operatingMargin}%, Revenue Growth: ${scores.ratios?.revenueGrowth}%)
-- Solvency Subscore: ${scores.solvencyScore}/100 (Current Ratio: ${scores.ratios?.currentRatio}, Debt-to-Equity: ${scores.ratios?.debtToEquity})
-- Momentum Subscore: ${scores.momentumScore}/100 (Trend: ${scores.ratios?.priceTrend})
+2. Multi-Factor Scorecard Breakdowns:
+- Overall Investment Score: ${breakdown.overallScore}/100
+- Deterministic Calculated Rating: ${breakdown.rating}
+- Valuation Score: ${breakdown.valuationScore !== null ? `${breakdown.valuationScore}/100` : 'N/A'} (Gap between consensus target and current price)
+- Financial Health Score: ${breakdown.financialsScore}/100 (Profitability: ${scores.profitabilityScore}/100, Solvency: ${scores.solvencyScore}/100)
+- Momentum Score: ${breakdown.momentumScore}/100 (Price Trend: ${scores.ratios?.priceTrend})
+- News Catalyst Score: ${breakdown.newsScore}/100 (Sentiment weighted by materiality)
+- Safety Score: ${breakdown.safetyScore}/100 (Active Risk Penalties applied: ${breakdown.safetyPenalties?.join(', ') || 'None'})
 
 3. Valuation Calculations (Blended Consensus):
 - Current Market Price: ${valuation.currentPrice ? `$${valuation.currentPrice.toFixed(2)}` : 'N/A'}
@@ -58,36 +75,29 @@ ${profile.description || 'N/A'}
 - Valuation Downside: ${valuation.downsidePercent}%
 - Margin of Safety Calculated: ${valuation.marginOfSafety}%
 - Quantitative Recommendation Basis: ${valuation.recommendationBasis}
-- Cost of Equity used in DCF: ${valuation.assumptions?.costOfEquity}%
-- FCF Growth rate projected in DCF: ${valuation.assumptions?.freeCashFlowGrowth}%
-- Sector PE Multiplier used: ${valuation.assumptions?.targetPE}
 
-4. Recent News & Developments:
+4. Recent News & Developments (Classified Sentiment & Materiality):
 ${newsSummary || 'No recent news articles collected.'}
 
 5. Analysis Assessment:
 - Deterministic analysis confidence level calculated in JS: ${confidenceScore}%
 
 ==================================================
-Role of the LLM: Qualitative Synthesizer
+Role of the LLM: Qualitative Synthesizer & Explainer
 ==================================================
 Your task is to interpret these numbers and compile a recommendation report.
 Do NOT invent financial numbers, target prices, margins of safety, or confidence levels. Use them exactly as provided above.
 
 Act as an experienced analyst:
-1. Formulate the final investment rating (Buy, Hold, or Sell). It should logically align with the quantitative price targets, BUT you may adjust it (e.g. from Sell to Hold, or Buy to Hold) if qualitative evidence strongly warrants it.
-2. Explain the core drivers of the thesis, tying the calculated metrics (Operating Margin, Leverage, Intrinsic Value, Upside/Downside) together.
-3. Incorporate the recent news articles. Assess how news trends, business developments, or macro factors impact their risk profile.
-4. Enumerate the risk factors.
-5. If you adjust the rating away from the pure valuation direction based on news, acquisitions, or strategic developments, you MUST explicitly explain the rationale in your thesis.
-
-You MUST output the "targetPrice" exactly as provided: ${valuation.consensusValue}.
+1. Use the deterministic rating: "${breakdown.rating}". You must explain WHY the multi-factor scorecard resulted in a "${breakdown.rating}" rating.
+2. In your thesis, explicitly explain the trade-offs between the factors. E.g., if valuation score is low (overvalued) but news catalysts are strong positive (e.g. major restructuring or new projects), explain how these offset each other.
+3. Call out specific risk factors from the Safety Score penalties listed above (e.g. weak liquidity or negative FCF) and discuss their implications.
 
 You must output STRICTLY a JSON object matching this schema:
 {
-  "rating": "Buy" | "Hold" | "Sell",
-  "targetPrice": ${valuation.consensusValue},
-  "investmentThesis": "A detailed 2-3 paragraph explanation of the bullish or bearish thesis supporting the rating. Synthesize the intrinsic value and qualitative context.",
+  "rating": "${breakdown.rating}",
+  "targetPrice": ${valuation.consensusValue || 'null'},
+  "investmentThesis": "A detailed 2-3 paragraph explanation of the bullish or bearish thesis supporting the rating. Synthesize the intrinsic value, financial quality, and news context.",
   "risks": [
     "Key risk factor 1 description",
     "Key risk factor 2 description"
@@ -100,9 +110,10 @@ Return only JSON. Do not write markdown quotes or conversational prefixes.
   try {
     const { data } = await llm.generateJSON(prompt);
     
-    // Explicit safety overwrite to guarantee targetPrice matches our calculation
+    // Explicit safety overwrite to guarantee targetPrice & rating match our calculations
     data.targetPrice = valuation.consensusValue;
     data.confidenceScore = confidenceScore;
+    data.rating = breakdown.rating;
 
     console.log(`[Graph Node]: Investment report compiled. Recommendation rating: ${data.rating}`);
 

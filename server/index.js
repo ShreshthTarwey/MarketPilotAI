@@ -28,6 +28,15 @@ app.get('/health', (req, res) => {
 });
 
 /**
+ * Cache Clearing Endpoint.
+ */
+app.post('/api/cache/clear', (req, res) => {
+  const cache = require('./src/providers/cache/memoryCache');
+  cache.clear();
+  res.json({ success: true, message: 'Memory cache cleared completely.' });
+});
+
+/**
  * Company Resolution Endpoint.
  * Resolves a company search query to a normalized stock ticker before triggering research.
  */
@@ -94,7 +103,8 @@ app.all('/api/research', async (req, res, next) => {
         resolvedIdentity: {
           ticker: finalState.resolvedTicker,
           name: finalState.resolvedName,
-          market: finalState.market
+          market: finalState.market,
+          resolutionConfidence: finalState.resolutionConfidence
         },
         profile: finalState.profile,
         financials: finalState.financials,

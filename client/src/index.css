@@ -876,3 +876,45 @@ a:hover {
 .risks-bullets li::marker {
   color: var(--error);
 }
+
+/* News Sentiment and Materiality Badges */
+.tag-badge {
+  display: inline-flex;
+  align-items: center;
+}
+
+.sentiment-positive {
+  background-color: rgba(46, 160, 67, 0.12);
+  color: #3fb950;
+  border: 1px solid rgba(46, 160, 67, 0.2);
+}
+
+.sentiment-negative {
+  background-color: rgba(248, 81, 73, 0.12);
+  color: #ff7b72;
+  border: 1px solid rgba(248, 81, 73, 0.2);
+}
+
+.sentiment-neutral {
+  background-color: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.materiality-high {
+  background-color: rgba(240, 136, 62, 0.12);
+  color: #ff9b54;
+  border: 1px solid rgba(240, 136, 62, 0.2);
+}
+
+.materiality-medium {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.materiality-low {
+  background-color: rgba(255, 255, 255, 0.03);
+  color: var(--text-muted);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}

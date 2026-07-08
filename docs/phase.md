@@ -418,9 +418,9 @@ Inside [`generateRecommendation.js`](file:///c:/Users/Asus/Desktop/MarketPilotAI
 
 ---
 
-### Phase 6: React Frontend Dashboard (Design Phase)
+### Phase 6: React Frontend Dashboard (Complete)
 
-We have created the visual design system and landing page wireframe for **MarketPilot AI** using Stitch. 
+We have successfully built and verified the React frontend dashboard, featuring circular scoring gauges, SVG progress tickers, detailed 5-year FCF projection spreadsheets, provenance citation logs, autocomplete symbol searches, and a console log stream loader. 
 
 ---
 
@@ -486,4 +486,141 @@ To prevent blank loading states, we built a custom loading console overlay:
 *   **Price Fallback Ingestion:** Modified `computeScores.js` to read the real-time stock price from `price.regularMarketPrice` in the QuoteSummary bundle if the Stooq/Yahoo Chart API fails, preventing valuation collapses on rate-limited or newly listed stock queries.
 
 ---
+
+## Multi-Factor Recommendation Engine Architecture & Design (Refined)
+
+### 1. High-Level Concept & Design Decisions
+Professional investment recommendations are based on a balanced, multi-dimensional view of a business. The **MarketPilot AI Recommendation Engine** evaluates five distinct dimensions:
+1.  **Valuation ($S_V$):** Continuous target price vs current trading price.
+2.  **Financial Health ($S_F$):** Balance Sheet Solvency and Income Statement Profitability.
+3.  **Momentum ($S_M$):** Short vs long term historical price trends.
+4.  **News Catalyst ($S_N$):** Sentiment weighted by importance/materiality of news.
+5.  **Safety Rating ($S_S$):** Red-flag risk deduction penalties.
+
+These components are consolidated in a purely deterministic JavaScript scoring function. The LLM is restricted from inventing ratings (Buy/Hold/Sell) or scores; it acts as a qualitative explainer, explaining the trade-offs computed in JS.
+
+---
+
+### 2. Systematic Valuation Engine Improvements
+To ensure the valuation engine produces realistic, financially reasonable intrinsic values for high-quality compounders, we corrected three systemic issues:
+1.  **Actual Beta CAPM:** Instead of double-levering the beta using $D/E$ against a baseline default, the model extracts the actual levered equity beta ($\beta_{\text{Actual}}$) directly from Yahoo Finance and uses it directly.
+    $$K_e = R_f + (\beta_{\text{Actual}} \cdot MRP)$$
+    *If beta is missing or zero, the engine falls back to de-levering/re-levering a default asset beta of 1.0.*
+2.  **Dynamic FCF Growth Cap:** Instead of a fixed 12% FCF growth cap, the growth cap scales dynamically based on the company's historical smoothed revenue growth ($g_{\text{Rev}}$):
+    *   If $g_{\text{Rev}} > 15\%$: Growth cap is lifted to **18%** (e.g. for high-growth tech).
+    *   If $g_{\text{Rev}} > 25\%$: Growth cap is lifted to **22%** (e.g. for hyper-growth tech).
+3.  **Expanded Sector Benchmarks:** Added explicit sector multiples supported by standard industry references (such as NYU Stern / Damodaran Sector Valuations):
+    *   `Technology` (PE: 28, PB: 6.0)
+    *   `Communication Services` (PE: 24, PB: 4.5)
+    *   `Consumer Cyclical` (PE: 25, PB: 5.0)
+    *   `Healthcare` (PE: 20, PB: 4.0)
+    *   `Financial Services` (PE: 14, PB: 1.5)
+    *   `Default` (PE: 18, PB: 2.5)
+
+---
+
+### 3. Detailed Multi-Factor Scoring Formula
+The consolidated **Base Overall Score** ($S_{\text{Base}}$, 0-100) is calculated as:
+$$S_{\text{Base}} = \frac{w_V \cdot S_V + w_F \cdot S_F + w_M \cdot S_M + w_N \cdot S_N + w_R \cdot S_S}{w_V + w_F + w_M + w_N + w_R}$$
+
+#### Balanced Weight Settings (stored in `valuationConfig.js`):
+*   $w_V$ (Valuation Weight) = `0.30`
+*   $w_F$ (Financials Weight) = `0.30`
+*   $w_R$ (Safety Risk Weight) = `0.15`
+*   $w_M$ (Momentum Weight) = `0.15`
+*   $w_N$ (News Catalyst Weight) = `0.10`
+
+*Dynamic Weight Normalization:* If valuation inputs are missing (e.g. for companies with missing profiles or target price calculations), the Valuation Score $S_V$ is marked `null`, and $w_V$ is excluded from both the numerator and denominator, re-scaling remaining active factor weights to sum to 100%.
+
+---
+
+### 4. Factor Subscore Calculations
+
+#### A. Valuation Score ($S_V$)
+Measures the gap between the blended consensus target price ($P_{\text{Target}}$) and the current market price ($P_{\text{Current}}$).
+$$\text{Upside} = \frac{P_{\text{Target}} - P_{\text{Current}}}{P_{\text{Current}}}$$
+*   **If Upside > 0 (Undervalued):**
+    $$S_V = \text{Clamp}\left(50 + \frac{\text{Upside}}{0.30} \cdot 50, \text{ min: } 50, \text{ max: } 100\right)$$
+*   **If Upside <= 0 (Overvalued):**
+    $$S_V = \text{Clamp}\left(50 - \frac{|\text{Upside}|}{0.30} \cdot 50, \text{ min: } 0, \text{ max: } 50\right)$$
+
+#### B. Financial Health Score ($S_F$)
+The average of the Profitability and Solvency scorecards:
+$$S_F = \frac{\text{Profitability Score} + \text{Solvency Score}}{2}$$
+
+#### C. Momentum Score ($S_M$)
+Mappable score reflecting 5-day vs 30-day price trends:
+*   `Bullish` = 90
+*   `Sideways` / `Neutral` = 60
+*   `Bearish` = 20
+*   `Unavailable` (no price history) = 50
+
+#### D. News Sentiment Score ($S_N$)
+Uses the LLM Router in a structured JSON call to classify news articles:
+*   **Sentiment ($Sentiment_i$):** Positive (`+1`), Neutral (`0`), Negative (`-1`).
+*   **Materiality ($Materiality_i$):** High (`3`), Medium (`2`), Low (`1`).
+The Net News Score is calculated as:
+$$\text{Net Sentiment} = \frac{\sum (Sentiment_i \cdot Materiality_i)}{\sum Materiality_i}$$
+$$S_N = 50 + (\text{Net Sentiment} \cdot 50)$$
+If no news articles are collected, $S_N$ defaults to `50`.
+
+#### E. Safety Score ($S_S$)
+Starts at 100 points, subtracting risk penalties for negative indicators:
+*   `Debt-to-Equity > 2.0` (High Leverage): Deduct `30`
+*   `Current Ratio < 1.0` (Weak Liquidity): Deduct `30`
+*   `Base FCF <= 0` (Negative Cash Flow): Deduct `20`
+*   `Operating Margin < 0` (Operating Losses): Deduct `20`
+*   `Revenue Growth < 0` (Declining Revenues): Deduct `20`
+*   `Price Trend === Bearish` (Downward Momentum): Deduct `15`
+Bounded to a minimum floor of `10`.
+
+---
+
+### 5. Proportional News Catalyst Modifier
+To ensure news catalysts have a material, mathematically proportional impact on the final rating, we calculate a news score modifier ($M_N$) scaled by both sentiment and materiality for each article:
+$$M_N = \text{Clamp}\left(\sum_{i} \left(Sentiment_i \cdot \frac{Materiality_i}{3} \cdot 6\right), \text{ min: } -15, \text{ max: } 10\right)$$
+This modifier is added directly to the base overall score to determine the final score:
+$$S_{\text{Overall}} = \text{Clamp}\left(S_{\text{Base}} + M_N, \text{ min: } 10, \text{ max: } 100\right)$$
+
+---
+
+### 6. Overall Decision Mapping & Safety Override Constraint
+To protect investors from highly distressed companies experiencing severe cash-burn and solvency issues, the engine implements a **Risk/Safety Override Constraint**:
+*   **Safety Override:** If the Safety Score ($S_S$) is below **40/100** (critical distress zone), the overall score is automatically capped at **39/100** ($S_{\text{Overall}} \le 39$), forcing a **`SELL`** rating regardless of any theoretical DCF or multiples valuation upside.
+
+The final deterministic rating is mapped directly from the capped score:
+*   **`BUY`**: $S_{\text{Overall}} \ge 65$
+*   **`HOLD`**: $40 \le S_{\text{Overall}} < 65$
+*   **`SELL`**: $S_{\text{Overall}} < 40$
+
+---
+
+### 7. Strict Company Resolution similarity Gate
+To prevent hallucinations, LLM-autocorrect suggestions are checked for similarity against the user's search query:
+*   **Levenshtein Distance:** Computes edit distance.
+*   **Acronym Check:** Matches queries like "TCS" directly to words of "Tata Consultancy Services".
+*   **Similarity Match Score:**
+    $$\text{Similarity} = \max\left(\text{Similarity}_{\text{Name}}, \text{Similarity}_{\text{Ticker}}\right)$$
+*   **Gate Constraint:** If similarity is below **70%** (`resolutionMinSimilarity: 0.70`), the resolved candidate is rejected, and resolution fails immediately with a validation error, skipping downstream nodes.
+
+---
+
+### 8. Dynamic Confidence Score
+Our confidence rating measures the predictability and alignment of the data gathered:
+*   *Completeness:* Starts from the base evidence completeness score.
+*   *Model Agreement:* If DCF and Multiples valuations agree on direction (both Buy or both Sell), add a `+5` points bonus. If they disagree, subtract `-15` points. If one model is completely missing, deduct `-10` points.
+*   *Data Recovery:* Deduct `-0.5` points for every recovered missing data point (measuring patchiness).
+Bounded to `[30, 100]`.
+
+---
+
+### Phase 7: Testing, Polish & Verification (Complete)
+We conducted comprehensive end-to-end integration testing and verified the logic against real stock queries (such as `TCS.NS`, `MRF.NS`, `LCID`, and `PWL.NS`). System features tested and verified:
+*   **WACC/CAPM/DCF Calculations:** Verified and cross-checked target valuations for equity returns against actual sector averages and company profile disclosures.
+*   **Key Rotation & Error Recovery:** Verified that Groq 502 Bad Gateway responses trigger rotation to other keys or seamlessly fall back to Gemini without failing requests.
+*   **Proxy and SSL Bypass:** Confirmed connection bypasses for enterprise firewall intercepts (e.g. Sophos).
+*   **Completeness Audits:** Handled graph state warning cleansers to avoid showing stale missing-data alerts once data was recollected.
+*   **Safety Overrides:** Capped distressed companies with heavy cash-burn to Sell ratings.
+
+
 

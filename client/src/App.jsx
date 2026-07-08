@@ -177,6 +177,9 @@ export default function App() {
                 <p className="report-name">{reportData.resolvedIdentity.name}</p>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '6px' }}>
                   Sector: {reportData.profile.sector || 'N/A'} &bull; Industry: {reportData.profile.industry || 'N/A'}
+                  {reportData.resolvedIdentity.resolutionConfidence !== undefined && (
+                    <> &bull; Resolution Match: {Math.round(reportData.resolvedIdentity.resolutionConfidence * 100)}%</>
+                  )}
                 </p>
               </div>
 
@@ -233,66 +236,132 @@ export default function App() {
                   <div className="report-card" style={{ marginTop: '24px' }}>
                     <h2 className="report-card-title">
                       <ShieldCheck size={18} />
-                      Deterministic Scorecard Analysis
+                      Multi-Factor Quantitative Scoring Engine
                     </h2>
-                    <div className="score-circle-grid">
-                      {/* Profitability */}
-                      <div className="score-circle-item">
-                        <div className="radial-gauge">
-                          <svg width="70" height="70">
-                            <circle cx="35" cy="35" r="30" className="radial-track" />
-                            <circle cx="35" cy="35" r="30" 
-                              className={`radial-fill ${reportData.scores.profitabilityScore >= 70 ? 'high' : reportData.scores.profitabilityScore >= 40 ? 'mid' : 'low'}`}
-                              strokeDasharray={`${2 * Math.PI * 30}`}
-                              strokeDashoffset={`${2 * Math.PI * 30 * (1 - (reportData.scores.profitabilityScore || 0) / 100)}`}
-                            />
-                          </svg>
-                          <span className="radial-text">{reportData.scores.profitabilityScore}%</span>
-                        </div>
-                        <span className="score-label">Profitability</span>
-                      </div>
+                    
+                    {/* Extract breakdown values with fallback support for backward compatibility */}
+                    {(() => {
+                      const breakdown = reportData.scores?.breakdown || {
+                        valuationScore: null,
+                        financialsScore: Math.round(((reportData.scores?.profitabilityScore || 50) + (reportData.scores?.solvencyScore || 50)) / 2),
+                        momentumScore: reportData.scores?.momentumScore || 50,
+                        newsScore: 50,
+                        safetyScore: 100,
+                        safetyPenalties: []
+                      };
 
-                      {/* Solvency */}
-                      <div className="score-circle-item">
-                        <div className="radial-gauge">
-                          <svg width="70" height="70">
-                            <circle cx="35" cy="35" r="30" className="radial-track" />
-                            <circle cx="35" cy="35" r="30" 
-                              className={`radial-fill ${reportData.scores.solvencyScore >= 70 ? 'high' : reportData.scores.solvencyScore >= 40 ? 'mid' : 'low'}`}
-                              strokeDasharray={`${2 * Math.PI * 30}`}
-                              strokeDashoffset={`${2 * Math.PI * 30 * (1 - (reportData.scores.solvencyScore || 0) / 100)}`}
-                            />
-                          </svg>
-                          <span className="radial-text">{reportData.scores.solvencyScore}%</span>
-                        </div>
-                        <span className="score-label">Solvency</span>
-                      </div>
+                      return (
+                        <>
+                          <div className="score-circle-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '4px', textAlign: 'center', margin: '16px 0' }}>
+                            {/* Valuation */}
+                            <div className="score-circle-item">
+                              <div className="radial-gauge">
+                                <svg width="56" height="56">
+                                  <circle cx="28" cy="28" r="23" className="radial-track" />
+                                  {breakdown.valuationScore !== null && (
+                                    <circle cx="28" cy="28" r="23" 
+                                      className={`radial-fill ${breakdown.valuationScore >= 65 ? 'high' : breakdown.valuationScore >= 40 ? 'mid' : 'low'}`}
+                                      strokeDasharray={`${2 * Math.PI * 23}`}
+                                      strokeDashoffset={`${2 * Math.PI * 23 * (1 - breakdown.valuationScore / 100)}`}
+                                    />
+                                  )}
+                                </svg>
+                                <span className="radial-text" style={{ fontSize: '0.7rem' }}>
+                                  {breakdown.valuationScore !== null ? `${breakdown.valuationScore}%` : 'N/A'}
+                                </span>
+                              </div>
+                              <span className="score-label" style={{ fontSize: '0.65rem', marginTop: '6px', whiteSpace: 'nowrap' }}>Valuation</span>
+                            </div>
 
-                      {/* Momentum */}
-                      <div className="score-circle-item">
-                        <div className="radial-gauge">
-                          <svg width="70" height="70">
-                            <circle cx="35" cy="35" r="30" className="radial-track" />
-                            <circle cx="35" cy="35" r="30" 
-                              className={`radial-fill ${reportData.scores.momentumScore >= 70 ? 'high' : reportData.scores.momentumScore >= 40 ? 'mid' : 'low'}`}
-                              strokeDasharray={`${2 * Math.PI * 30}`}
-                              strokeDashoffset={`${2 * Math.PI * 30 * (1 - (reportData.scores.momentumScore || 0) / 100)}`}
-                            />
-                          </svg>
-                          <span className="radial-text">{reportData.scores.momentumScore}%</span>
-                        </div>
-                        <span className="score-label">Momentum</span>
-                      </div>
-                    </div>
+                            {/* Financials */}
+                            <div className="score-circle-item">
+                              <div className="radial-gauge">
+                                <svg width="56" height="56">
+                                  <circle cx="28" cy="28" r="23" className="radial-track" />
+                                  <circle cx="28" cy="28" r="23" 
+                                    className={`radial-fill ${breakdown.financialsScore >= 65 ? 'high' : breakdown.financialsScore >= 40 ? 'mid' : 'low'}`}
+                                    strokeDasharray={`${2 * Math.PI * 23}`}
+                                    strokeDashoffset={`${2 * Math.PI * 23 * (1 - breakdown.financialsScore / 100)}`}
+                                  />
+                                </svg>
+                                <span className="radial-text" style={{ fontSize: '0.7rem' }}>{breakdown.financialsScore}%</span>
+                              </div>
+                              <span className="score-label" style={{ fontSize: '0.65rem', marginTop: '6px', whiteSpace: 'nowrap' }}>Financials</span>
+                            </div>
 
-                    <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid rgba(255, 255, 255, 0.03)' }}>
-                      <div style={{ display: 'flex', justifyBetween: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.85rem' }}>Overall Aggregated Financial Score</span>
+                            {/* Momentum */}
+                            <div className="score-circle-item">
+                              <div className="radial-gauge">
+                                <svg width="56" height="56">
+                                  <circle cx="28" cy="28" r="23" className="radial-track" />
+                                  <circle cx="28" cy="28" r="23" 
+                                    className={`radial-fill ${breakdown.momentumScore >= 65 ? 'high' : breakdown.momentumScore >= 40 ? 'mid' : 'low'}`}
+                                    strokeDasharray={`${2 * Math.PI * 23}`}
+                                    strokeDashoffset={`${2 * Math.PI * 23 * (1 - breakdown.momentumScore / 100)}`}
+                                  />
+                                </svg>
+                                <span className="radial-text" style={{ fontSize: '0.7rem' }}>{breakdown.momentumScore}%</span>
+                              </div>
+                              <span className="score-label" style={{ fontSize: '0.65rem', marginTop: '6px', whiteSpace: 'nowrap' }}>Momentum</span>
+                            </div>
+
+                            {/* News */}
+                            <div className="score-circle-item">
+                              <div className="radial-gauge">
+                                <svg width="56" height="56">
+                                  <circle cx="28" cy="28" r="23" className="radial-track" />
+                                  <circle cx="28" cy="28" r="23" 
+                                    className={`radial-fill ${breakdown.newsScore >= 65 ? 'high' : breakdown.newsScore >= 40 ? 'mid' : 'low'}`}
+                                    strokeDasharray={`${2 * Math.PI * 23}`}
+                                    strokeDashoffset={`${2 * Math.PI * 23 * (1 - breakdown.newsScore / 100)}`}
+                                  />
+                                </svg>
+                                <span className="radial-text" style={{ fontSize: '0.7rem' }}>{breakdown.newsScore}%</span>
+                              </div>
+                              <span className="score-label" style={{ fontSize: '0.65rem', marginTop: '6px', whiteSpace: 'nowrap' }}>News Catalyst</span>
+                            </div>
+
+                            {/* Safety */}
+                            <div className="score-circle-item">
+                              <div className="radial-gauge">
+                                <svg width="56" height="56">
+                                  <circle cx="28" cy="28" r="23" className="radial-track" />
+                                  <circle cx="28" cy="28" r="23" 
+                                    className={`radial-fill ${breakdown.safetyScore >= 65 ? 'high' : breakdown.safetyScore >= 40 ? 'mid' : 'low'}`}
+                                    strokeDasharray={`${2 * Math.PI * 23}`}
+                                    strokeDashoffset={`${2 * Math.PI * 23 * (1 - breakdown.safetyScore / 100)}`}
+                                  />
+                                </svg>
+                                <span className="radial-text" style={{ fontSize: '0.7rem' }}>{breakdown.safetyScore}%</span>
+                              </div>
+                              <span className="score-label" style={{ fontSize: '0.65rem', marginTop: '6px', whiteSpace: 'nowrap' }}>Safety</span>
+                            </div>
+                          </div>
+
+                          {breakdown.safetyPenalties && breakdown.safetyPenalties.length > 0 && (
+                            <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>Active Risk Warnings:</span>
+                              <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: '6px' }}>
+                                {breakdown.safetyPenalties.map((penalty, idx) => (
+                                  <span key={idx} style={{ fontSize: '0.7rem', background: 'rgba(248, 81, 73, 0.08)', color: '#f85149', padding: '3px 8px', borderRadius: '4px', border: '1px solid rgba(248, 81, 73, 0.15)' }}>
+                                    {penalty}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+
+                    <div style={{ marginTop: '20px', paddingTop: '12px', borderTop: '1px solid rgba(255, 255, 255, 0.03)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Overall Multi-Factor Investment Score</span>
                         <span style={{ fontFamily: 'var(--mono)', fontWeight: 'bold', color: 'var(--text-primary)' }}>
                           {reportData.scores.overallScore}/100
                         </span>
                       </div>
-                      <div className="progress-container">
+                      <div className="progress-container" style={{ marginTop: '6px' }}>
                         <div className="progress-fill" style={{ width: `${reportData.scores.overallScore}%` }}></div>
                       </div>
                     </div>
@@ -492,8 +561,18 @@ export default function App() {
                     {reportData.news && reportData.news.length > 0 ? (
                       reportData.news.map((item, idx) => (
                         <div key={idx} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.02)', paddingBottom: '12px' }}>
-                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>
-                            [{item.source}] &bull; {item.date}
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--mono)', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px' }}>
+                            <span>[{item.source}] &bull; {item.date}</span>
+                            {item.sentiment && (
+                              <span className={`tag-badge sentiment-${item.sentiment}`} style={{ textTransform: 'uppercase', fontSize: '0.6rem', padding: '1px 5px', borderRadius: '3px', fontWeight: 'bold' }}>
+                                {item.sentiment}
+                              </span>
+                            )}
+                            {item.materiality && (
+                              <span className={`tag-badge materiality-${item.materiality}`} style={{ textTransform: 'uppercase', fontSize: '0.6rem', padding: '1px 5px', borderRadius: '3px', fontWeight: 'bold' }}>
+                                Impact: {item.materiality}
+                              </span>
+                            )}
                           </span>
                           <p style={{ color: 'var(--text-primary)', fontSize: '0.9rem', fontWeight: '500', margin: '4px 0' }}>
                             {item.title}

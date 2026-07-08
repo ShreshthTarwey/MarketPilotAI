@@ -4,7 +4,8 @@ import os
 import sys
 
 # Paths for the current conversation session
-CONVERSATION_ID = "fc39ca14-f534-4b6a-8a10-2d662c67431d"
+# CONVERSATION_ID = "fc39ca14-f534-4b6a-8a10-2d662c67431d"
+CONVERSATION_ID = "dd5a3ad1-5342-4168-b97b-49290cd2bcf7"
 DEFAULT_TRANSCRIPT_PATH = rf"C:\Users\Asus\.gemini\antigravity-ide\brain\{CONVERSATION_ID}\.system_generated\logs\transcript.jsonl"
 DEFAULT_OUTPUT_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "chat_history.md"))
 

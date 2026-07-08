@@ -15,7 +15,7 @@ module.exports = {
   // CAPM Cost of Equity (Ke) parameters
   costOfEquityDefaults: {
     riskFreeRate: 0.04,      // 4.0% Risk-Free Rate (Rf)
-    marketRiskPremium: 0.06,  // 6.0% Market Risk Premium (MRP)
+    marketRiskPremium: 0.055, // 5.5% Market Risk Premium (MRP)
     betaUnlevered: 1.0,      // Baseline asset unlevered beta (Bu)
     taxRate: 0.25            // 25% corporate tax rate proxy
   },
@@ -29,26 +29,38 @@ module.exports = {
   // Projected growth limit bounds
   growthLimits: {
     min: 0.025,              // Floor of 2.5% FCF growth
-    max: 0.120               // Cap of 12.0% FCF growth
+    max: 0.180               // Cap of 18.0% FCF growth (dynamic caps up to this bound)
   },
 
-  // Comparable multiples sector benchmarks (Future-proof configuration structure)
+  // Comparable multiples sector benchmarks (NYU Stern / Damodaran Sector Valuation Benchmarks)
   sectorMultiples: {
     'Technology': {
-      pe: 25,
-      pb: 5.0,
+      pe: 28,
+      pb: 6.0,
       evEbitda: 15.0,
       ps: 4.0
     },
+    'Communication Services': {
+      pe: 24,
+      pb: 4.5,
+      evEbitda: 14.0,
+      ps: 3.5
+    },
+    'Consumer Cyclical': {
+      pe: 25,
+      pb: 5.0,
+      evEbitda: 14.0,
+      ps: 3.5
+    },
     'Healthcare': {
-      pe: 22,
+      pe: 20,
       pb: 4.0,
       evEbitda: 14.0,
       ps: 3.5
     },
     'Financial Services': {
-      pe: 12,
-      pb: 1.2,
+      pe: 14,
+      pb: 1.5,
       evEbitda: 10.0,
       ps: 2.0
     },
@@ -95,5 +107,17 @@ module.exports = {
     buyUpside: 0.15,         // 15% upside target for Buy rating
     sellDownside: 0.15,      // 15% downside target for Sell rating
     marginOfSafetyTarget: 0.20 // 20% default Margin of Safety threshold
+  },
+
+  // Resolution confidence similarity minimum threshold
+  resolutionMinSimilarity: 0.70, // 70% match threshold between query and LLM correction suggestions
+
+  // Multi-Factor score weightings
+  multiFactorWeights: {
+    valuation: 0.30,     // Gap between consensus target price and current trading price (30%)
+    financials: 0.30,    // Scorecard metrics (Profitability & Solvency) (30%)
+    momentum: 0.15,      // Price trend (Bullish/Bearish/Neutral) (15%)
+    news: 0.10,          // Sentiment & materiality score (10%)
+    risk: 0.15           // Risk metrics penalty (Safety Score) (15%)
   }
 };

@@ -81,7 +81,7 @@ class LLMRouter extends ILLMProvider {
     
     // Timeout/Abort errors and network errors
     if (name === 'AbortError' || name === 'TimeoutError') return true;
-    if (message.includes('fetch') || message.includes('network') || message.includes('timeout') || message.includes('econnrefused')) {
+    if (message.includes('fetch') || message.includes('network') || message.includes('timeout') || message.includes('econnrefused') || message.includes('retryable')) {
       return true;
     }
     

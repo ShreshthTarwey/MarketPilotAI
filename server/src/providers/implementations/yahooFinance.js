@@ -120,6 +120,7 @@ class YahooFinanceProvider extends IFinancialDataProvider {
       description: profile.longBusinessSummary || 'No description available.',
       marketCap: this._val(detail.marketCap || price.marketCap),
       currentPrice: this._val(price.regularMarketPrice || detail.previousClose),
+      beta: this._val(detail.beta || summary.defaultKeyStatistics?.beta),
       country: profile.country || 'Unknown Country',
       website: profile.website || 'No website available.'
     };

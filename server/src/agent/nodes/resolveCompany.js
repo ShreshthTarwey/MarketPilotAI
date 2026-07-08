@@ -50,6 +50,7 @@ async function resolveCompanyNode(state) {
     resolvedTicker: result.ticker,
     resolvedName: result.name,
     market: result.market,
+    resolutionConfidence: result.resolutionConfidence || 1.0,
     executionStage: 'collecting evidence'
   };
 }

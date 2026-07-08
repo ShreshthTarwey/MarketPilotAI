@@ -53,6 +53,30 @@ function calculateConfidence(state) {
     score -= 10;
   }
 
+  // 5. Model Agreement Check (Valuation Agreement)
+  const valuation = state.valuation || {};
+  const currentPrice = state.marketContext?.currentPrice || valuation.currentPrice;
+  const dcfVal = valuation.dcfValue || valuation.fairPrice; // Support nested and flat structures
+  const multVal = valuation.relativeValue || valuation.peVal || valuation.pbVal;
+
+  if (dcfVal && multVal && currentPrice) {
+    const dcfIsBuy = dcfVal > currentPrice;
+    const multIsBuy = multVal > currentPrice;
+    
+    if (dcfIsBuy !== multIsBuy) {
+      score -= 15; // Models disagree on direction! Deduct 15 points.
+    } else {
+      score += 5;  // Models agree! Add 5 points bonus.
+    }
+  } else if (!dcfVal || !multVal) {
+    score -= 10; // Less data alignment (one model is missing)
+  }
+
+  // 6. Quality of Financials (Deduct points for active recovery operations)
+  if (recoveryHistory.length > 0) {
+    score -= Math.min(10, recoveryHistory.length * 0.5); // Max 10 points penalty for patchy/recovered data
+  }
+
   // Enforce boundaries
   return Math.max(30, Math.min(100, Math.round(score)));
 }

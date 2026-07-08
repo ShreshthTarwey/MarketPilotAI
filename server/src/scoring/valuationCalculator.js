@@ -10,20 +10,25 @@ const config = require('../config/valuationConfig');
 
 /**
  * Calculates Cost of Equity (Ke) using CAPM and Levered Beta formulas.
+ * Supports actual beta input or unlevered fallback.
  * 
  * @param {number} debtToEquity - Solvency ratio (D/E)
+ * @param {number} actualBeta - Equity beta from market (if available)
  * @returns {number} Cost of Equity decimal (e.g., 0.11)
  */
-function calculateCostOfEquity(debtToEquity) {
+function calculateCostOfEquity(debtToEquity, actualBeta = null) {
   const defaults = config.costOfEquityDefaults;
   
-  // 1. Calculate Levered Beta: BL = BU * (1 + (1 - TaxRate) * D/E)
-  const betaLevered = defaults.betaUnlevered * (1 + (1 - defaults.taxRate) * Math.max(0, debtToEquity));
+  // Use actual beta if provided and valid, otherwise fall back to unlevered baseline beta levered by D/E
+  let beta = actualBeta;
+  if (beta === null || beta === undefined || beta <= 0) {
+    beta = defaults.betaUnlevered * (1 + (1 - defaults.taxRate) * Math.max(0, debtToEquity));
+  }
   
-  // 2. CAPM: Ke = Rf + Beta_levered * MRP
-  const costOfEquity = defaults.riskFreeRate + (betaLevered * defaults.marketRiskPremium);
+  // CAPM: Ke = Rf + Beta * MRP
+  const costOfEquity = defaults.riskFreeRate + (beta * defaults.marketRiskPremium);
 
-  // 3. Enforce policy bounds
+  // Enforce policy bounds
   return Math.max(config.costOfEquityLimits.min, Math.min(config.costOfEquityLimits.max, costOfEquity));
 }
 
@@ -66,8 +71,8 @@ function calculateSmoothedGrowth(incomeStatements) {
   // Calculate average of available growths
   const averageGrowth = growths.reduce((acc, g) => acc + g, 0) / growths.length;
   
-  // Apply final safety clamps loaded from configuration
-  return Math.max(config.growthLimits.min, Math.min(config.growthLimits.max, averageGrowth / 100));
+  // Return raw smoothed growth decimal (clamp to floor minimum only, let runDcfModel apply dynamic cap)
+  return Math.max(config.growthLimits.min, averageGrowth / 100);
 }
 
 /**
@@ -109,11 +114,24 @@ function runDcfModel(financials, profile, currentPrice, debtToEquity) {
     return defaultResult;
   }
 
-  // Calculate Cost of Equity (CAPM) using solvency-linked Beta levering
-  const costOfEquity = calculateCostOfEquity(debtToEquity);
+  // Calculate Cost of Equity (CAPM) using solvency-linked Beta levering (or actual beta if present)
+  const costOfEquity = calculateCostOfEquity(debtToEquity, profile?.beta);
 
   // Compute forecast growth logic with confidence smoothing
-  const fcfGrowth = calculateSmoothedGrowth(income);
+  const rawGrowth = calculateSmoothedGrowth(income);
+  
+  // Dynamic growth cap based on historical revenue growth:
+  // If historical growth > 15%, lift the cap to 18%.
+  // If historical growth > 25%, lift the cap to 22%.
+  let dynamicCap = 0.12; // Baseline cap (12%)
+  if (rawGrowth > 0.15) {
+    dynamicCap = 0.18;
+  }
+  if (rawGrowth > 0.25) {
+    dynamicCap = 0.22;
+  }
+  
+  const fcfGrowth = Math.min(dynamicCap, rawGrowth);
 
   // Project future cash flows for 5 years
   const projectedFcf = [];
@@ -173,12 +191,14 @@ function runRelativeValuation(financials, profile, currentPrice) {
   }
 
   // Resolve sector benchmark multiples
-  const sector = profile.industry || profile.sector || 'Default';
+  const industry = (profile.industry || '').toUpperCase();
+  const sector = (profile.sector || '').toUpperCase();
   let targetPE = config.sectorMultiples.Default.pe;
   let targetPB = config.sectorMultiples.Default.pb;
 
   for (const [key, value] of Object.entries(config.sectorMultiples)) {
-    if (sector.toUpperCase().includes(key.toUpperCase())) {
+    const uKey = key.toUpperCase();
+    if (industry.includes(uKey) || sector.includes(uKey)) {
       targetPE = value.pe;
       targetPB = value.pb;
       break;
