@@ -309,7 +309,138 @@ graph TD
 
 ---
 
-## 5. Technology Stack
+## 5. Detailed Implementation Phases
+
+### Phase 1: Foundation Layer (Complete)
+Established config validation (`env.js`), graph channels (`state.js`), and abstract provider contracts (`interfaces/`).
+
+### Phase 2: Data & Provider Layer (Complete)
+Implemented cache singleton, ticker autocompletes, Tavily search connectors, SEC EDGAR XBRL scrapers, Yahoo Chart historical downloaders, and the master router's field-level recovery cascade.
+
+#### A. In-Memory Cache System (No Database Architecture)
+Since there is no external database like Redis or MongoDB, the caching mechanism is implemented entirely in-memory using the Node.js process RAM:
+*   **Singleton Memory Store:** The cache module ([memoryCache.js](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/providers/cache/memoryCache.js)) exports a single, globally instantiated singleton class that holds a private JavaScript `Map` object: `this.store = new Map();`. Because the Node.js server process runs continuously in the background, the state of this `Map` is preserved across all HTTP API requests.
+*   **Time-To-Live (TTL) & Expiries:** When saving a key (e.g. `yahoo-financials:AAPL`), it assigns an expiry timestamp `Date.now() + duration`. During lookup, it compares the current time against the key's expiry. If expired, it deletes the key and returns `null`.
+*   **Memory Leak Auto-Pruning:** A background garbage-collection timer runs every 5 minutes using `setInterval` to scan the store, prune expired entries, and release memory automatically.
+*   **Cache Clearing Route:** We exposed a POST endpoint `/api/cache/clear` in [index.js](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/index.js) that calls `cache.clear()` to purge all cached objects on-demand, making it easy to reset states during testing.
+
+#### B. Manual Verification Steps for Cache
+1.  **Start Server:** Launch the server inside `server/` with `node index.js`.
+2.  **Initial Run (Cache Miss):** Query `AAPL` in the React search bar. Look at the server terminal logs to see:
+    ```text
+    [Yahoo Finance]: Fetching QuoteSummary modules for "AAPL"
+    [Cache]: Saved key: yahoo-financials:AAPL (TTL: 3600000ms)
+    ```
+    *The first load requires active network requests and takes 1–3 seconds.*
+3.  **Repeat Run (Cache Hit):** Click "Back to Search" and query `AAPL` again. The data loads instantly (<50ms). Look at the logs:
+    ```text
+    [Cache]: Hit for key: company-resolution:AAPL
+    [Cache]: Hit for key: yahoo-financials:AAPL
+    ```
+4.  **Clear Cache:** Send a POST request to clear the RAM store:
+    *   *PowerShell:* `Invoke-RestMethod -Uri http://localhost:5000/api/cache/clear -Method Post`
+    *   *Bash/Curl:* `curl -X POST http://localhost:5000/api/cache/clear`
+    The server will log `[Cache]: Cache cleared completely.`
+5.  **Verify Reset:** Query `AAPL` a third time. The request will trigger a cache miss and execute fresh API calls.
+
+### Phase 3: LangGraph Orchestration Layer (Complete)
+Built the service layer, single-responsibility nodes, input validation, evidence aggregator diagnostics, compiled StateGraph with conditional routing, and verification tests.
+
+### Phase 4: Deterministic Scoring & Valuations (Complete)
+We have built a fully transparent, configurable, and mathematically explainable **Consensus Valuation Engine** in JavaScript. The implementation separates core formulas from LLM interpretation, ensuring that numerical accuracy is fully preserved in code while the LLM focuses entirely on qualitative analysis.
+
+#### A. Phase 4 Files & Usages
+The following files were created or modified to implement the financial scoring and deterministic valuation pipeline:
+1.  **[`server/src/config/valuationConfig.js`](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/config/valuationConfig.js)**
+    *   **Usage:** Declares baseline macro settings (risk-free rate, market risk premium, forecast years, and terminal perpetual growth) alongside sector multiples tables (prepared for P/E, P/B, EV/EBITDA, P/S) and consensus blending weights.
+    *   **Pipeline Position:** Loaded by the valuation library at execution time to set policy rules.
+2.  **[`server/src/scoring/valuationCalculator.js`](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/scoring/valuationCalculator.js)**
+    *   **Usage:** Contains the core mathematical modeling engines:
+        *   *CAPM Cost of Equity:* Solves $\beta_L$ using balance sheet leverage, then applies CAPM.
+        *   *Smoothed Growth Average:* Averages YoY growths and applies linear compression to eliminate spikes.
+        *   *5-Year DCF:* Projects FCF, discounts using Cost of Equity ($K_e$), and solves intrinsic fair price keylessly.
+        *   *Relative Multiples:* Multiplies earnings and book equity by sector benchmarks.
+        *   *Consensus Blender:* Averages DCF (60%) and Comps (40%).
+    *   **Pipeline Position:** Invoked by `computeScoresNode` to perform quantitative valuation.
+3.  **[`server/src/agent/state.js`](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/agent/state.js)**
+    *   **Usage:** Added the rich `valuation` state channel and schema to store raw consensus prices, upside margins of safety, assumptions, and intermediate calculation arrays.
+    *   **Pipeline Position:** Defines the shared data schema passed between LangGraph nodes.
+4.  **[`server/src/agent/nodes/computeScores.js`](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/agent/nodes/computeScores.js)**
+    *   **Usage:** Extracts the resolved financial history, invokes `valuationCalculator.compileValuationReport()`, and updates the graph state with the rich valuation payload.
+    *   **Pipeline Position:** Executed directly after the targeted recollection nodes check out of quality gates.
+5.  **[`server/src/agent/nodes/generateRecommendation.js`](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/agent/nodes/generateRecommendation.js)**
+    *   **Usage:** Injects the current trading price, consensus target price, and the rich intermediate assumptions into the LLM synthesis prompt template, forcing prompt constraints that restrict the LLM from inventing numerical scores.
+    *   **Pipeline Position:** The final node of the StateGraph before compile output.
+6.  **[`server/src/scoring/evidenceAggregator.js`](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/scoring/evidenceAggregator.js)**
+    *   **Usage:** Realigned `calculateConfidence` to query the program's stateless `evaluateQualityGate` report, ensuring that empty balance sheet elements correctly decrease the deterministic confidence percentage (e.g. dropping to 60% for partial filings).
+    *   **Pipeline Position:** Invoked inside `collectEvidenceNode` and `recollectMissingNode` to audit data quality.
+7.  **[`server/tests/testGraph.js`](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/tests/testGraph.js)**
+    *   **Usage:** Added diagnostic sections rendering the base FCF, projected arrays, terminal values, present values, and multiple valuations to verify all mathematical formulas.
+    *   **Pipeline Position:** Terminal test CLI runner.
+
+#### B. Why We Estimate Intrinsic Value (Target Price)
+*   **What is Intrinsic Value?** Intrinsic value is the "true" or "fair" value of a business based on its underlying cash-generating power, financial health, and risk profile. It is completely independent of the stock market trading price.
+*   **Why Professional Investors Estimate Fair Value:**
+    1.  *Margin of Safety:* Investors seek a "buffer" between the purchase price and the intrinsic value to protect against forecasting errors or temporary market downturns.
+    2.  *Objective Decision-Making:* Having a math-backed target price prevents investors from making emotional decisions driven by daily market volatility or short-term panic/hype.
+*   **Why Different Analysts Obtain Different Target Prices:** Valuation is not a hard science; it is a set of logical projections. Different analysts make different assumptions about growth rates, cost of equity discount rates, and long-term perpetual growth rates.
+*   **Why Calculate Our Own Valuation vs. Fetching Analyst Targets:**
+    1.  *Analyst Optimism Bias:* Sell-side analysts historically skew heavily towards optimistic ratings due to institutional conflicts of interest.
+    2.  *Stale Lagging Indicators:* Consensus figures are updated infrequently and lag macroeconomic shifts.
+    3.  *Low Coverage on Niche / Mid-Cap Equities:* Many regional equities or mid-caps have zero institutional coverage.
+    4.  *Custom Stress-Testing:* By controlling the calculation models in JavaScript, we can dynamically stress-test scenarios.
+
+#### C. Dynamic vs. Configurable Inputs
+*   **Dynamic Inputs (Stock-Specific):** Retrieved and computed dynamically for each target company: Revenue, Net Income, Free Cash Flow (FCF), Book Value / Total Equity, Market Capitalization, Current Stock Price, and Total Debt.
+*   **Configurable Inputs (Global Policy Settings):** Centralized in `valuationConfig.js`: Risk-Free Rate ($R_f = 4.0\%$), Market Risk Premium ($\text{MRP} = 6.0\%$), Forecast Horizon (5 Years), Terminal Growth Rate (2.5%), and Sector Multiples.
+
+#### D. In-Depth Formula Documentation
+*   **Revenue Growth Rate (Smoothed Average):** YoY growth is calculated, and extreme growth spikes are compressed dynamically to prevent abnormal outlier forecasts:
+    $$\text{YoY Growth}_t = \left(\frac{\text{Revenue}_t - \text{Revenue}_{t-1}}{\text{Revenue}_{t-1}}\right) \times 100$$
+    $$\text{Smoothed YoY Growth}_t = \begin{cases} 
+      30 + 0.1 \times (\text{YoY Growth}_t - 30) & \text{if } \text{YoY Growth}_t > 30 \\
+      -20 + 0.1 \times (\text{YoY Growth}_t + 20) & \text{if } \text{YoY Growth}_t < -20 \\
+      \text{YoY Growth}_t & \text{otherwise}
+   \end{cases}$$
+*   **Free Cash Flow Growth Rate (Projected):** Projected FCF growth rate is bounded between a configured minimum limit (2.5%) and a dynamic growth cap (12% to 22% depending on historical revenue growth):
+    $$\text{Projected } g_{\text{FCF}} = \max\left(\text{MinLimit}, \min\left(\text{MaxLimit}, \text{Consensus Growth}\right)\right)$$
+*   **Levered Beta ($\beta_L$) & Cost of Equity ($K_e$) via CAPM:**
+    $$\beta_{\text{levered}} = \beta_{\text{unlevered}} \times \left(1 + (1 - \text{Tax Rate}) \times \frac{\text{Total Debt}}{\text{Total Equity}}\right)$$
+    $$\text{Cost of Equity } (K_e) = R_f + \beta_{\text{levered}} \times \text{MRP}$$
+*   **Perpetual Terminal Value (TV):** Projects Year 6 perpetuity value:
+    $$TV = \frac{FCF_5 \times (1 + g_{\text{terminal}})}{K_e - g_{\text{terminal}}}$$
+*   **Discounted Cash Flow (PV of Cash Flows):**
+    $$PV = \sum_{t=1}^5 \frac{FCF_t}{(1 + K_e)^t} + \frac{TV}{(1 + K_e)^5}$$
+*   **Enterprise Value & Equity Value (Algebraic Resolution):** Resolves fair price without shares database lookup to bypass paid API limitations:
+    $$\text{Fair Stock Price (DCF)} = \text{Current Stock Price} \times \left(\frac{\text{Total Present Value of Equity (PV)}}{\text{Total Market Cap}}\right)$$
+*   **Relative Valuation (Comparable Multiples):**
+    $$\text{PE Valuation} = \text{Current Price} \times \left(\frac{\text{Net Income} \times \text{Target PE}}{\text{Market Cap}}\right)$$
+    $$\text{PB Valuation} = \text{Current Price} \times \left(\frac{\text{Book Equity} \times \text{Target PB}}{\text{Market Cap}}\right)$$
+    $$\text{Relative Multiple Fair Price} = \frac{\text{PE Valuation} + \text{PB Valuation}}{2}$$
+*   **Blended Consensus Valuation:**
+    $$\text{Consensus Target Price} = 60\% \times \text{DCF Value} + 40\% \times \text{Relative Multiples Value}$$
+*   **Margin of Safety (MoS):**
+    $$\text{Margin of Safety (\%)} = \left(\frac{\text{Consensus Target Price} - \text{Current Price}}{\text{Consensus Target Price}}\right) \times 100$$
+
+#### E. Valuation Engine Assumptions & Uncertainties
+*   *Dynamic Assumptions (Calculated per Stock):* Revenue growth, FCF forecast growth, CAPM WACC Cost of Equity (leveraged dynamically by solvency ratio), and target sector multiples.
+*   *Configurable assumptions (Centralized Policies):* Forecast horizon (5 years), perpetual growth (2.5% inflation proxy), CAPM constants ($R_f = 4.0\%$, $\text{MRP} = 6.0\%$), and blended weights.
+
+### Phase 5: LLM Synthesis & REST API (Complete)
+Exposed Express endpoints `/api/resolve` and `/api/research`, implemented global errorHandler.js middlewares catcher, and wrote strict prompt constraints ensuring LLM explains decisions without inventing numbers.
+
+### Phase 6: React Frontend Dashboard (Complete)
+Built the institutional user interface, monochrome dark/light layout tokens, circular SVG scorecard dials, 5-Year Cash Flow projection tables, dynamic loading logs console stream loader, and SSL proxy bypass routines.
+
+### Phase 7: Testing, Polish & Verification (Complete)
+Verified E2E calculations against real tickers, confirmed key API rotation logic, handled completeness gate alerts, and implemented dynamic currency symbol resolution (e.g. `INR` / `₹`, `GBP` / `£`, `EUR` / `€`, defaulting to `USD` / `$`).
+
+### Phase 8: Institutional UI/UX Refinement & Transparency
+Refactored the dashboard executive summary layout with structured company snapshot metadata, key financial ratios tables, score breakdowns, confidence checklists, target pricing gap absolute differentials, news sentiment distributions, and dynamic decision drivers.
+
+---
+
+## 6. Technology Stack
 *   **Frontend:** React, Vite, SVG Charts, CSS (Dynamic Light / Dark Mode Toggle)
 *   **Backend:** Node.js, Express
 *   **AI Orchestration:** LangGraph.js, LangChain.js, Google Gemini, Groq (Llama-3.3-70B)
