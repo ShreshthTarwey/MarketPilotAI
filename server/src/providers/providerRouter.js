@@ -12,6 +12,19 @@ const TavilySearchProvider = require('./implementations/tavilySearch');
 const CompanyResolver = require('./implementations/companyResolver');
 const LLMRouter = require('./llmRouter');
 
+function getCurrencySymbol(currencyCode) {
+  switch (currencyCode?.toUpperCase()) {
+    case 'INR': return '₹';
+    case 'USD': return '$';
+    case 'EUR': return '€';
+    case 'GBP': return '£';
+    case 'JPY': return '¥';
+    case 'CAD': return 'C$';
+    case 'AUD': return 'A$';
+    default: return '$';
+  }
+}
+
 // Load Quality Gate validators for diagnostics
 const {
   evaluateProfile,
@@ -127,10 +140,11 @@ class ProviderRouter {
   async collectProfile(ticker, market) {
     const fallbackHistory = [];
     const startTime = Date.now();
+    let result = null;
 
     try {
       const data = await this.financialProvider.fetchProfile(ticker);
-      return {
+      result = {
         profile: data,
         sources: {
           profile: {
@@ -152,13 +166,14 @@ class ProviderRouter {
       });
     }
 
-    // Fallback: Tavily + LLM Scraper
-    const searchStartTime = Date.now();
-    try {
-      const query = `${ticker} company profile overview headquarters sector industry description`;
-      const searchResults = await this.searchProvider.search(query, { maxResults: 2 });
-      
-      const prompt = `
+    if (!result) {
+      // Fallback: Tavily + LLM Scraper
+      const searchStartTime = Date.now();
+      try {
+        const query = `${ticker} company profile overview headquarters CEO employees exchange market cap website founded`;
+        const searchResults = await this.searchProvider.search(query, { maxResults: 3 });
+        
+        const prompt = `
 You are acting as a corporate data scraper.
 We need to construct a standard company profile for the ticker "${ticker}".
 Here is raw web search data about the company:
@@ -173,40 +188,97 @@ Extract the following information and output STRICTLY a JSON object matching thi
   "description": "2-3 sentence overview of what the company does",
   "marketCap": 120000000000,
   "country": "E.g. United States or India",
-  "website": "E.g. https://www.apple.com"
+  "website": "E.g. https://www.apple.com",
+  "employees": 164000,
+  "ceo": "CEO Name",
+  "exchange": "E.g. NASDAQ",
+  "headquarters": "City, State, Country",
+  "peRatio": 32.5,
+  "eps": 6.57,
+  "founded": 1976
 }
+
+CRITICAL: Extract the snapshot fields ("employees", "ceo", "exchange", "headquarters", "peRatio", "eps", "founded") ONLY if they are explicitly and reliably stated in the search results text above. If a field is not found or is ambiguous, set it to null. Do NOT guess, infer, or hallucinate any values.
+
 Do not include any surrounding markdown block or conversational explanation.
 `;
 
-      const { data } = await this.llmRouter.generateJSON(prompt);
-      
-      return {
-        profile: data,
-        sources: {
-          profile: {
-            providerName: 'TavilySearch+LLM',
-            fallbackLevel: 3,
-            sourceUrl: searchResults[0]?.url || '',
-            fetchedAt: new Date().toISOString()
-          }
-        },
-        fallbackHistory
-      };
-    } catch (err) {
-      fallbackHistory.push({
-        category: 'profile',
-        providerName: 'TavilySearch+LLM',
-        error: err.message,
-        timestamp: new Date().toISOString(),
-        latencyMs: Date.now() - searchStartTime
-      });
+        const { data } = await this.llmRouter.generateJSON(prompt);
+        
+        // Ensure standard schema compatibility
+        const profileData = {
+          ticker: ticker.trim().toUpperCase(),
+          name: data.name || ticker,
+          sector: data.sector || 'Unknown Sector',
+          industry: data.industry || 'Unknown Industry',
+          description: data.description || 'No description available.',
+          marketCap: typeof data.marketCap === 'number' ? data.marketCap : 0,
+          currentPrice: 0,
+          beta: 1.0,
+          country: data.country || 'Unknown Country',
+          website: data.website || 'No website available.',
+          employees: typeof data.employees === 'number' ? data.employees : null,
+          ceo: data.ceo || null,
+          exchange: data.exchange || null,
+          headquarters: data.headquarters || null,
+          peRatio: typeof data.peRatio === 'number' ? data.peRatio : null,
+          eps: typeof data.eps === 'number' ? data.eps : null,
+          founded: typeof data.founded === 'number' ? data.founded : null
+        };
 
-      return {
-        profile: null,
-        sources: {},
-        fallbackHistory
-      };
+        result = {
+          profile: profileData,
+          sources: {
+            profile: {
+              providerName: 'TavilySearch+LLM',
+              fallbackLevel: 3,
+              sourceUrl: searchResults[0]?.url || '',
+              fetchedAt: new Date().toISOString()
+            }
+          },
+          fallbackHistory
+        };
+      } catch (err) {
+        fallbackHistory.push({
+          category: 'profile',
+          providerName: 'TavilySearch+LLM',
+          error: err.message,
+          timestamp: new Date().toISOString(),
+          latencyMs: Date.now() - searchStartTime
+        });
+
+        result = {
+          profile: null,
+          sources: {},
+          fallbackHistory
+        };
+      }
     }
+
+    // Post-process profile to add currency and currencySymbol dynamically
+    if (result && result.profile) {
+      let currency = result.profile.currency;
+      if (!currency) {
+        const tickerUpper = ticker.toUpperCase();
+        if (tickerUpper.endsWith('.NS') || tickerUpper.endsWith('.BO')) {
+          currency = 'INR';
+        } else if (tickerUpper.endsWith('.L')) {
+          currency = 'GBP';
+        } else if (tickerUpper.endsWith('.TO') || tickerUpper.endsWith('.V')) {
+          currency = 'CAD';
+        } else if (tickerUpper.endsWith('.AX')) {
+          currency = 'AUD';
+        } else if (tickerUpper.endsWith('.DE') || tickerUpper.endsWith('.PA') || tickerUpper.endsWith('.AS') || tickerUpper.endsWith('.MI') || tickerUpper.endsWith('.MC') || tickerUpper.endsWith('.VI')) {
+          currency = 'EUR';
+        } else {
+          currency = 'USD';
+        }
+      }
+      result.profile.currency = currency;
+      result.profile.currencySymbol = getCurrencySymbol(currency);
+    }
+
+    return result;
   }
 
   /**

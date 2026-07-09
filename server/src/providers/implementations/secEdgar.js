@@ -122,7 +122,17 @@ class SecEdgarProvider extends IFinancialDataProvider {
         description: `SEC Corporate disclosures for CIK ${cik} (${data.entityName || symbol}).`,
         marketCap: 0, // Market cap is not in standard historical accounting statements
         country: 'United States',
-        website: 'https://www.sec.gov'
+        website: 'https://www.sec.gov',
+        currency: 'USD',
+        
+        // Snapshots fallbacks:
+        employees: null,
+        ceo: null,
+        exchange: 'SEC / US Exchanges',
+        headquarters: 'United States',
+        peRatio: null,
+        eps: null,
+        founded: null
       };
 
       cache.set(cacheKey, profile);

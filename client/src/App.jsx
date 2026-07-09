@@ -16,6 +16,74 @@ import {
 } from 'lucide-react';
 import Loader from './components/Loader';
 
+function formatLargeNumber(num, currencySymbol = '$') {
+  if (num === null || num === undefined || isNaN(num) || num === 0) return 'N/A';
+  const absNum = Math.abs(num);
+  let formatted = '';
+  if (absNum >= 1e12) {
+    formatted = (num / 1e12).toFixed(2) + 'T';
+  } else if (absNum >= 1e9) {
+    formatted = (num / 1e9).toFixed(2) + 'B';
+  } else if (absNum >= 1e6) {
+    formatted = (num / 1e6).toFixed(2) + 'M';
+  } else {
+    formatted = num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  return currencySymbol + formatted;
+}
+
+function formatCount(num) {
+  if (num === null || num === undefined || isNaN(num) || num === 0) return 'N/A';
+  if (num >= 1e6) return (num / 1e6).toFixed(1) + 'M';
+  if (num >= 1e3) return (num / 1e3).toFixed(1) + 'k';
+  return num.toLocaleString();
+}
+
+function getSupportingFactorsList(reportData) {
+  const factors = [];
+  const ratios = reportData.scores?.ratios || {};
+  const scoresObj = reportData.scores || {};
+  const breakdown = scoresObj.breakdown || {};
+  const valuation = reportData.valuation || {};
+  const rating = reportData.recommendation?.rating?.toLowerCase() || 'hold';
+
+  if (rating === 'buy') {
+    if (ratios.revenueGrowth > 10) factors.push("Accelerating revenue growth");
+    if (ratios.operatingMargin > 15) factors.push("Strong operating profitability");
+    if (ratios.debtToEquity < 0.8) factors.push("Healthy solvency (low leverage)");
+    if (ratios.currentRatio > 1.5) factors.push("Robust short-term liquidity");
+    if (ratios.freeCashFlow > 0) factors.push("Positive free cash flow generation");
+    if (valuation.marginOfSafety > 0) factors.push(`Trades at ${valuation.marginOfSafety.toFixed(0)}% safety discount`);
+    if (factors.length === 0) {
+      factors.push("Strong quantitative scoring breakdown");
+      factors.push("Healthy overall solvency profiles");
+    }
+  } else if (rating === 'sell') {
+    if (ratios.revenueGrowth < 0) factors.push("Declining revenue growth trends");
+    if (ratios.operatingMargin < 0) factors.push("Operating losses recorded");
+    if (ratios.debtToEquity > 2.0) factors.push("High leverage ratio (debt risk)");
+    if (ratios.currentRatio < 1.0) factors.push("Weak short-term liquidity cover");
+    if (ratios.freeCashFlow <= 0) factors.push("Negative free cash flow burn");
+    if (valuation.marginOfSafety <= 0) factors.push("No margin of safety (trading premium)");
+    if (breakdown.safetyScore < 40) factors.push("Critical solvency safety alerts active");
+    if (factors.length === 0) {
+      factors.push("Weak scoring metrics across factor scales");
+      factors.push("Elevated valuation risks identified");
+    }
+  } else {
+    if (valuation.marginOfSafety <= 0) factors.push("Fair valuation (trading at premium)");
+    else factors.push(`Fair valuation (${valuation.marginOfSafety.toFixed(0)}% safety buffer)`);
+    if (ratios.operatingMargin > 0 && ratios.operatingMargin < 15) factors.push("Moderate operating profitability");
+    if (ratios.debtToEquity >= 0.8 && ratios.debtToEquity <= 2.0) factors.push("Moderate balance sheet leverage");
+    if (ratios.priceTrend === 'Sideways') factors.push("Sideways market price momentum");
+    if (factors.length === 0) {
+      factors.push("Balanced profitability and trend factors");
+      factors.push("Neutral qualitative news catalyst score");
+    }
+  }
+  return factors.slice(0, 4);
+}
+
 export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
@@ -25,6 +93,7 @@ export default function App() {
   const [loadingLogs, setLoadingLogs] = useState([]);
   const [reportData, setReportData] = useState(null);
   const [activeTab, setActiveTab] = useState('overview'); // overview, financials, risks
+  const [errorMsg, setErrorMsg] = useState(null);
 
   // Pre-flight Resolve Autocomplete Debounce
   useEffect(() => {
@@ -34,8 +103,10 @@ export default function App() {
         const res = await fetch(`http://localhost:5000/api/resolve?company=${encodeURIComponent(searchQuery)}`);
         if (!res.ok) return;
         const data = await res.json();
-        if (data && data.ticker) {
+        if (data && data.success && data.ticker) {
           setSuggestions([data]);
+        } else if (data && !data.success && data.suggestions && data.suggestions.length > 0) {
+          setSuggestions(data.suggestions);
         } else {
           setSuggestions([]);
         }
@@ -46,6 +117,15 @@ export default function App() {
 
     return () => clearTimeout(delayDebounceFn);
   }, [searchQuery]);
+
+  // Auto-dismiss execution error toast after 5 seconds
+  useEffect(() => {
+    if (!errorMsg) return;
+    const timer = setTimeout(() => {
+      setErrorMsg(null);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [errorMsg]);
 
   // Execute Core LangGraph Research Pipeline
   const runResearch = async (companyName) => {
@@ -113,7 +193,7 @@ export default function App() {
     } catch (err) {
       clearInterval(interval);
       console.error(err);
-      alert(`Research Execution Error: ${err.message}`);
+      setErrorMsg(err.message);
       setIsLoading(false);
     }
   };
@@ -133,6 +213,8 @@ export default function App() {
     }
   };
 
+  const currencySymbol = reportData?.profile?.currencySymbol || '$';
+
   return (
     <>
       {/* Navigation Header */}
@@ -151,6 +233,21 @@ export default function App() {
         </nav>
         <button className="btn-primary" onClick={() => setReportData(null)}>Reset View</button>
       </header>
+
+      {errorMsg && (
+        <div className="error-toast-container">
+          <div className="error-toast-card">
+            <div className="error-toast-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <AlertTriangle size={18} className="error-toast-icon" style={{ color: '#ff7b72' }} />
+                <span className="error-toast-title">Research Execution Error</span>
+              </div>
+              <button className="error-toast-close" onClick={() => setErrorMsg(null)}>&times;</button>
+            </div>
+            <p className="error-toast-body">{errorMsg}</p>
+          </div>
+        </div>
+      )}
 
       {/* Main Container */}
       <main className="page-container">
@@ -175,19 +272,40 @@ export default function App() {
                   <span className="report-market-label">{reportData.resolvedIdentity.market || 'Equity'}</span>
                 </h1>
                 <p className="report-name">{reportData.resolvedIdentity.name}</p>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '6px' }}>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '6px', marginBottom: '8px' }}>
                   Sector: {reportData.profile.sector || 'N/A'} &bull; Industry: {reportData.profile.industry || 'N/A'}
                   {reportData.resolvedIdentity.resolutionConfidence !== undefined && (
                     <> &bull; Resolution Match: {Math.round(reportData.resolvedIdentity.resolutionConfidence * 100)}%</>
                   )}
                 </p>
+                {reportData.profile.description && (
+                  <p style={{ fontStyle: 'italic', color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '8px', lineHeight: '1.5', maxWidth: '800px' }}>
+                    "{reportData.profile.description.split('. ').slice(0, 2).join('. ') + '.'}"
+                  </p>
+                )}
               </div>
 
-              <div className="report-rating-badge">
+              <div className="report-rating-badge" style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '240px' }}>
                 <div className={`badge-value ${reportData.recommendation.rating?.toLowerCase()}`}>
                   {reportData.recommendation.rating}
                 </div>
                 <p className="badge-sublabel">Calculated Intrinsic Decision</p>
+                
+                {/* Recommendation Summary Card */}
+                <div className="rec-summary-box">
+                  <span className="rec-summary-title">Key Decision Drivers</span>
+                  <ul className="rec-summary-list">
+                    {getSupportingFactorsList(reportData).map((factor, idx) => (
+                      <li key={idx} className="rec-summary-item">{factor}</li>
+                    ))}
+                  </ul>
+                </div>
+                
+                {reportData.recommendation.lastUpdated && (
+                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textAlign: 'right', display: 'block', marginTop: '4px' }}>
+                    Last Updated: {new Date(reportData.recommendation.lastUpdated).toLocaleString()}
+                  </span>
+                )}
               </div>
             </section>
 
@@ -218,185 +336,353 @@ export default function App() {
 
             {/* TAB CONTENT: EXECUTIVE OVERVIEW */}
             {activeTab === 'overview' && (
-              <div className="report-grid">
-                {/* Left Column: Thesis & Scorecards */}
-                <div style={{ display: 'flex', flexDirection: 'col', gap: '24px' }}>
-                  {/* LLM Thesis Panel */}
-                  <div className="report-card">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                
+                {/* ROW 1: Snapshot & Key Financial Metrics */}
+                <div className="report-grid">
+                  {/* Card 1.1: Company Snapshot */}
+                  <div className="report-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                     <h2 className="report-card-title">
-                      <FileText size={18} />
-                      Investment Thesis
+                      <Workflow size={18} />
+                      Company Snapshot
                     </h2>
-                    <div className="thesis-body">
-                      <p>{reportData.recommendation.investmentThesis}</p>
+                    <div className="snapshot-grid">
+                      {reportData.profile.ceo && (
+                        <div className="snapshot-item">
+                          <span className="snapshot-label">CEO</span>
+                          <span className="snapshot-value">{reportData.profile.ceo}</span>
+                        </div>
+                      )}
+                      {reportData.profile.employees && (
+                        <div className="snapshot-item">
+                          <span className="snapshot-label">Employees</span>
+                          <span className="snapshot-value">{formatCount(reportData.profile.employees)}</span>
+                        </div>
+                      )}
+                      {reportData.profile.headquarters && (
+                        <div className="snapshot-item">
+                          <span className="snapshot-label">Headquarters</span>
+                          <span className="snapshot-value">{reportData.profile.headquarters}</span>
+                        </div>
+                      )}
+                      {reportData.profile.exchange && (
+                        <div className="snapshot-item">
+                          <span className="snapshot-label">Exchange</span>
+                          <span className="snapshot-value">{reportData.profile.exchange}</span>
+                        </div>
+                      )}
+                      {reportData.profile.country && (
+                        <div className="snapshot-item">
+                          <span className="snapshot-label">Country</span>
+                          <span className="snapshot-value">{reportData.profile.country}</span>
+                        </div>
+                      )}
+                      {reportData.profile.founded && (
+                        <div className="snapshot-item">
+                          <span className="snapshot-label">Founded</span>
+                          <span className="snapshot-value">{reportData.profile.founded}</span>
+                        </div>
+                      )}
+                      {reportData.profile.marketCap > 0 && (
+                        <div className="snapshot-item">
+                          <span className="snapshot-label">Market Cap</span>
+                          <span className="snapshot-value">{formatLargeNumber(reportData.profile.marketCap, currencySymbol)}</span>
+                        </div>
+                      )}
+                      {reportData.profile.website && reportData.profile.website !== 'No website available.' && (
+                        <div className="snapshot-item">
+                          <span className="snapshot-label">Website</span>
+                          <span className="snapshot-value">
+                            <a href={reportData.profile.website} target="_blank" rel="noreferrer" className="snapshot-link">
+                              {reportData.profile.website.replace('https://', '').replace('http://', '').replace('www.', '')}
+                            </a>
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  {/* Dynamic Scorecard progress */}
-                  <div className="report-card" style={{ marginTop: '24px' }}>
+                  {/* Card 1.2: Key Financial Metrics */}
+                  <div className="report-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                     <h2 className="report-card-title">
-                      <ShieldCheck size={18} />
-                      Multi-Factor Quantitative Scoring Engine
+                      <Activity size={18} />
+                      Key Financial Metrics
                     </h2>
-                    
-                    {/* Extract breakdown values with fallback support for backward compatibility */}
                     {(() => {
-                      const breakdown = reportData.scores?.breakdown || {
-                        valuationScore: null,
-                        financialsScore: Math.round(((reportData.scores?.profitabilityScore || 50) + (reportData.scores?.solvencyScore || 50)) / 2),
-                        momentumScore: reportData.scores?.momentumScore || 50,
-                        newsScore: 50,
-                        safetyScore: 100,
-                        safetyPenalties: []
-                      };
-
+                      const ratios = reportData.scores?.ratios || {};
                       return (
-                        <>
-                          <div className="score-circle-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '4px', textAlign: 'center', margin: '16px 0' }}>
-                            {/* Valuation */}
-                            <div className="score-circle-item">
-                              <div className="radial-gauge">
-                                <svg width="56" height="56">
-                                  <circle cx="28" cy="28" r="23" className="radial-track" />
-                                  {breakdown.valuationScore !== null && (
-                                    <circle cx="28" cy="28" r="23" 
-                                      className={`radial-fill ${breakdown.valuationScore >= 65 ? 'high' : breakdown.valuationScore >= 40 ? 'mid' : 'low'}`}
-                                      strokeDasharray={`${2 * Math.PI * 23}`}
-                                      strokeDashoffset={`${2 * Math.PI * 23 * (1 - breakdown.valuationScore / 100)}`}
-                                    />
-                                  )}
-                                </svg>
-                                <span className="radial-text" style={{ fontSize: '0.7rem' }}>
-                                  {breakdown.valuationScore !== null ? `${breakdown.valuationScore}%` : 'N/A'}
-                                </span>
-                              </div>
-                              <span className="score-label" style={{ fontSize: '0.65rem', marginTop: '6px', whiteSpace: 'nowrap' }}>Valuation</span>
-                            </div>
-
-                            {/* Financials */}
-                            <div className="score-circle-item">
-                              <div className="radial-gauge">
-                                <svg width="56" height="56">
-                                  <circle cx="28" cy="28" r="23" className="radial-track" />
-                                  <circle cx="28" cy="28" r="23" 
-                                    className={`radial-fill ${breakdown.financialsScore >= 65 ? 'high' : breakdown.financialsScore >= 40 ? 'mid' : 'low'}`}
-                                    strokeDasharray={`${2 * Math.PI * 23}`}
-                                    strokeDashoffset={`${2 * Math.PI * 23 * (1 - breakdown.financialsScore / 100)}`}
-                                  />
-                                </svg>
-                                <span className="radial-text" style={{ fontSize: '0.7rem' }}>{breakdown.financialsScore}%</span>
-                              </div>
-                              <span className="score-label" style={{ fontSize: '0.65rem', marginTop: '6px', whiteSpace: 'nowrap' }}>Financials</span>
-                            </div>
-
-                            {/* Momentum */}
-                            <div className="score-circle-item">
-                              <div className="radial-gauge">
-                                <svg width="56" height="56">
-                                  <circle cx="28" cy="28" r="23" className="radial-track" />
-                                  <circle cx="28" cy="28" r="23" 
-                                    className={`radial-fill ${breakdown.momentumScore >= 65 ? 'high' : breakdown.momentumScore >= 40 ? 'mid' : 'low'}`}
-                                    strokeDasharray={`${2 * Math.PI * 23}`}
-                                    strokeDashoffset={`${2 * Math.PI * 23 * (1 - breakdown.momentumScore / 100)}`}
-                                  />
-                                </svg>
-                                <span className="radial-text" style={{ fontSize: '0.7rem' }}>{breakdown.momentumScore}%</span>
-                              </div>
-                              <span className="score-label" style={{ fontSize: '0.65rem', marginTop: '6px', whiteSpace: 'nowrap' }}>Momentum</span>
-                            </div>
-
-                            {/* News */}
-                            <div className="score-circle-item">
-                              <div className="radial-gauge">
-                                <svg width="56" height="56">
-                                  <circle cx="28" cy="28" r="23" className="radial-track" />
-                                  <circle cx="28" cy="28" r="23" 
-                                    className={`radial-fill ${breakdown.newsScore >= 65 ? 'high' : breakdown.newsScore >= 40 ? 'mid' : 'low'}`}
-                                    strokeDasharray={`${2 * Math.PI * 23}`}
-                                    strokeDashoffset={`${2 * Math.PI * 23 * (1 - breakdown.newsScore / 100)}`}
-                                  />
-                                </svg>
-                                <span className="radial-text" style={{ fontSize: '0.7rem' }}>{breakdown.newsScore}%</span>
-                              </div>
-                              <span className="score-label" style={{ fontSize: '0.65rem', marginTop: '6px', whiteSpace: 'nowrap' }}>News Catalyst</span>
-                            </div>
-
-                            {/* Safety */}
-                            <div className="score-circle-item">
-                              <div className="radial-gauge">
-                                <svg width="56" height="56">
-                                  <circle cx="28" cy="28" r="23" className="radial-track" />
-                                  <circle cx="28" cy="28" r="23" 
-                                    className={`radial-fill ${breakdown.safetyScore >= 65 ? 'high' : breakdown.safetyScore >= 40 ? 'mid' : 'low'}`}
-                                    strokeDasharray={`${2 * Math.PI * 23}`}
-                                    strokeDashoffset={`${2 * Math.PI * 23 * (1 - breakdown.safetyScore / 100)}`}
-                                  />
-                                </svg>
-                                <span className="radial-text" style={{ fontSize: '0.7rem' }}>{breakdown.safetyScore}%</span>
-                              </div>
-                              <span className="score-label" style={{ fontSize: '0.65rem', marginTop: '6px', whiteSpace: 'nowrap' }}>Safety</span>
-                            </div>
-                          </div>
-
-                          {breakdown.safetyPenalties && breakdown.safetyPenalties.length > 0 && (
-                            <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>Active Risk Warnings:</span>
-                              <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: '6px' }}>
-                                {breakdown.safetyPenalties.map((penalty, idx) => (
-                                  <span key={idx} style={{ fontSize: '0.7rem', background: 'rgba(248, 81, 73, 0.08)', color: '#f85149', padding: '3px 8px', borderRadius: '4px', border: '1px solid rgba(248, 81, 73, 0.15)' }}>
-                                    {penalty}
-                                  </span>
-                                ))}
-                              </div>
+                        <div className="metrics-grid">
+                          {reportData.profile.peRatio !== null && (
+                            <div className="metric-item">
+                              <span className="metric-label">P/E Ratio</span>
+                              <span className="metric-value">{reportData.profile.peRatio.toFixed(1)}x</span>
                             </div>
                           )}
-                        </>
+                          {reportData.profile.eps !== null && (
+                            <div className="metric-item">
+                              <span className="metric-label">EPS</span>
+                              <span className="metric-value">{currencySymbol}{reportData.profile.eps.toFixed(2)}</span>
+                            </div>
+                          )}
+                          {ratios.roe !== undefined && ratios.roe !== null && ratios.roe !== 0 && (
+                            <div className="metric-item">
+                              <span className="metric-label">Return on Equity (ROE)</span>
+                              <span className="metric-value">{ratios.roe.toFixed(1)}%</span>
+                            </div>
+                          )}
+                          {ratios.operatingMargin !== undefined && ratios.operatingMargin !== null && ratios.operatingMargin !== 0 && (
+                            <div className="metric-item">
+                              <span className="metric-label">Operating Margin</span>
+                              <span className="metric-value">{ratios.operatingMargin.toFixed(1)}%</span>
+                            </div>
+                          )}
+                          {ratios.revenueGrowth !== undefined && ratios.revenueGrowth !== null && ratios.revenueGrowth !== 0 && (
+                            <div className="metric-item">
+                              <span className="metric-label">Revenue Growth</span>
+                              <span className="metric-value">{ratios.revenueGrowth.toFixed(1)}%</span>
+                            </div>
+                          )}
+                          {ratios.currentRatio !== undefined && ratios.currentRatio !== null && ratios.currentRatio !== 0 && (
+                            <div className="metric-item">
+                              <span className="metric-label">Current Ratio</span>
+                              <span className="metric-value">{ratios.currentRatio.toFixed(2)}x</span>
+                            </div>
+                          )}
+                          {ratios.debtToEquity !== undefined && ratios.debtToEquity !== null && ratios.debtToEquity !== 0 && (
+                            <div className="metric-item">
+                              <span className="metric-label">Debt-to-Equity</span>
+                              <span className="metric-value">{ratios.debtToEquity.toFixed(2)}x</span>
+                            </div>
+                          )}
+                          {ratios.freeCashFlow !== undefined && ratios.freeCashFlow !== null && ratios.freeCashFlow !== 0 && (
+                            <div className="metric-item">
+                              <span className="metric-label">Free Cash Flow</span>
+                              <span className="metric-value">{formatLargeNumber(ratios.freeCashFlow, currencySymbol)}</span>
+                            </div>
+                          )}
+                        </div>
                       );
                     })()}
+                  </div>
+                </div>
 
-                    <div style={{ marginTop: '20px', paddingTop: '12px', borderTop: '1px solid rgba(255, 255, 255, 0.03)' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Overall Multi-Factor Investment Score</span>
-                        <span style={{ fontFamily: 'var(--mono)', fontWeight: 'bold', color: 'var(--text-primary)' }}>
-                          {reportData.scores.overallScore}/100
-                        </span>
+                {/* ROW 2: Thesis & Calculated Targets */}
+                <div className="report-grid">
+                  {/* Card 2.1: Investment Thesis & AI Risks */}
+                  <div className="report-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '24px' }}>
+                    <div>
+                      <h2 className="report-card-title">
+                        <FileText size={18} />
+                        Investment Thesis
+                      </h2>
+                      <div className="thesis-body">
+                        {reportData.recommendation.investmentThesis?.split('\n').filter(p => p.trim()).map((para, i) => (
+                          <p key={i} className="thesis-paragraph">{para}</p>
+                        ))}
                       </div>
-                      <div className="progress-container" style={{ marginTop: '6px' }}>
-                        <div className="progress-fill" style={{ width: `${reportData.scores.overallScore}%` }}></div>
+                    </div>
+                    
+                    {/* AI-Synthesized Qualitative Risks */}
+                    {reportData.recommendation.risks && reportData.recommendation.risks.length > 0 && (
+                      <div className="ai-risks-section">
+                        <h3 className="ai-risks-title">
+                          <AlertTriangle size={15} />
+                          AI-Synthesized Qualitative Risk Factors
+                        </h3>
+                        <ul className="ai-risks-list">
+                          {reportData.recommendation.risks.map((risk, idx) => (
+                            <li key={idx} className="ai-risk-item">
+                              <span className="risk-bullet">&bull;</span>
+                              <span>{risk}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Card 2.2: Calculated Targets */}
+                  <div className="report-card" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <h2 className="report-card-title">
+                      <Calculator size={18} />
+                      Calculated Targets
+                    </h2>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', flexGrow: 1, justifyContent: 'center' }}>
+                      <div>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Consensus Fair Price Target</span>
+                        <p style={{ fontFamily: 'var(--mono)', fontSize: '2.2rem', fontWeight: '800', color: 'var(--text-primary)', margin: '4px 0 0 0' }}>
+                          {currencySymbol}{reportData.valuation.consensusValue?.toFixed(2)}
+                        </p>
+                      </div>
+
+                      <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.04)', paddingTop: '16px' }}>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Current Trading Price</span>
+                        <p style={{ fontFamily: 'var(--mono)', fontSize: '1.3rem', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
+                          {currencySymbol}{reportData.valuation.currentPrice?.toFixed(2)}
+                        </p>
+                      </div>
+
+                      {(() => {
+                        const diff = (reportData.valuation.consensusValue || 0) - (reportData.valuation.currentPrice || 0);
+                        const sign = diff >= 0 ? '+' : '';
+                        return (
+                          <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.04)', paddingTop: '16px' }}>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Valuation Pricing Gap</span>
+                            <p style={{ fontFamily: 'var(--mono)', fontSize: '1.3rem', color: diff >= 0 ? 'var(--success)' : 'var(--error)', margin: '4px 0 0 0' }}>
+                              {sign}{currencySymbol}{diff.toFixed(2)}
+                            </p>
+                          </div>
+                        );
+                      })()}
+
+                      <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.04)', paddingTop: '16px' }}>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Margin of Safety</span>
+                        <div style={{ marginTop: '8px' }}>
+                          {reportData.valuation.marginOfSafety > 0 ? (
+                            <div className="mos-alert positive">
+                              <ShieldCheck size={14} />
+                              <span>+{reportData.valuation.marginOfSafety.toFixed(1)}% Discount</span>
+                            </div>
+                          ) : (
+                            <div className="mos-alert negative">
+                              <AlertTriangle size={14} />
+                              <span>Premium Price Gap (No Safety Margin)</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Right Column: Key Stats & Quality Gate Status */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                  {/* Quality Gate Status Card */}
-                  <div className="report-card">
+                {/* ROW 3: Score Breakdown Table & Confidence Explanation */}
+                <div className="report-grid">
+                  {/* Card 3.1: Compact Score Breakdown Table */}
+                  <div className="report-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <h2 className="report-card-title">
+                      <ShieldCheck size={18} />
+                      Multi-Factor Scoring Engine Breakdown
+                    </h2>
+                    {(() => {
+                      const breakdown = reportData.scores?.breakdown || {
+                        valuationScore: null,
+                        financialsScore: 50,
+                        momentumScore: 50,
+                        newsScore: 50,
+                        safetyScore: 100,
+                        newsModifier: 0
+                      };
+                      const weights = { valuation: 0.30, financials: 0.30, momentum: 0.15, news: 0.10, risk: 0.15 };
+                      const isValuationNull = breakdown.valuationScore === null;
+                      const activeWeightsSum = isValuationNull ? 0.70 : 1.0;
+                      const normWeights = {
+                        valuation: isValuationNull ? 0 : 0.30 / activeWeightsSum,
+                        financials: 0.30 / activeWeightsSum,
+                        momentum: 0.15 / activeWeightsSum,
+                        news: 0.10 / activeWeightsSum,
+                        risk: 0.15 / activeWeightsSum
+                      };
+
+                      return (
+                        <table className="score-breakdown-table">
+                          <thead>
+                            <tr>
+                              <th>Factor Category</th>
+                              <th style={{ textAlign: 'center' }}>Raw Score</th>
+                              <th style={{ textAlign: 'center' }}>Weight</th>
+                              <th style={{ textAlign: 'right' }}>Weighted Contribution</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {breakdown.valuationScore !== null && (
+                              <tr>
+                                <td>Valuation Model Gap</td>
+                                <td style={{ textAlign: 'center' }}>{breakdown.valuationScore}%</td>
+                                <td style={{ textAlign: 'center' }}>{Math.round(normWeights.valuation * 100)}%</td>
+                                <td style={{ textAlign: 'right', fontWeight: 'bold' }}>
+                                  {((breakdown.valuationScore / 100) * (normWeights.valuation * 100)).toFixed(1)} / {Math.round(normWeights.valuation * 100)}
+                                </td>
+                              </tr>
+                            )}
+                            <tr>
+                              <td>Financial Health Quality</td>
+                              <td style={{ textAlign: 'center' }}>{breakdown.financialsScore}%</td>
+                              <td style={{ textAlign: 'center' }}>{Math.round(normWeights.financials * 100)}%</td>
+                              <td style={{ textAlign: 'right', fontWeight: 'bold' }}>
+                                {((breakdown.financialsScore / 100) * (normWeights.financials * 100)).toFixed(1)} / {Math.round(normWeights.financials * 100)}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td>Price Trend Momentum</td>
+                              <td style={{ textAlign: 'center' }}>{breakdown.momentumScore}%</td>
+                              <td style={{ textAlign: 'center' }}>{Math.round(normWeights.momentum * 100)}%</td>
+                              <td style={{ textAlign: 'right', fontWeight: 'bold' }}>
+                                {((breakdown.momentumScore / 100) * (normWeights.momentum * 100)).toFixed(1)} / {Math.round(normWeights.momentum * 100)}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td>News Sentiment Catalysts</td>
+                              <td style={{ textAlign: 'center' }}>{breakdown.newsScore}%</td>
+                              <td style={{ textAlign: 'center' }}>{Math.round(normWeights.news * 100)}%</td>
+                              <td style={{ textAlign: 'right', fontWeight: 'bold' }}>
+                                {((breakdown.newsScore / 100) * (normWeights.news * 100)).toFixed(1)} / {Math.round(normWeights.news * 100)}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td>Solvency Risk Safety</td>
+                              <td style={{ textAlign: 'center' }}>{breakdown.safetyScore}%</td>
+                              <td style={{ textAlign: 'center' }}>{Math.round(normWeights.risk * 100)}%</td>
+                              <td style={{ textAlign: 'right', fontWeight: 'bold' }}>
+                                {((breakdown.safetyScore / 100) * (normWeights.risk * 100)).toFixed(1)} / {Math.round(normWeights.risk * 100)}
+                              </td>
+                            </tr>
+                            {breakdown.newsModifier !== 0 && (
+                              <tr className="modifier-row">
+                                <td colSpan="3" style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>Proportional News Catalyst Modifier</td>
+                                <td style={{ textAlign: 'right', color: breakdown.newsModifier > 0 ? 'var(--success)' : 'var(--error)', fontWeight: 'bold' }}>
+                                  {breakdown.newsModifier > 0 ? `+${breakdown.newsModifier}` : breakdown.newsModifier}
+                                </td>
+                              </tr>
+                            )}
+                            <tr className="total-row">
+                              <td colSpan="3" style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>Consolidated Investment Score</td>
+                              <td style={{ textAlign: 'right', color: 'var(--success)', fontWeight: '800', fontSize: '1.2rem' }}>
+                                {reportData.scores.overallScore} / 100
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Card 3.2: Research Confidence Checklist */}
+                  <div className="report-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                     <h2 className="report-card-title">
                       <FileCheck size={18} />
-                      Evidence Quality Gate
+                      Research Confidence Checklist
                     </h2>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '8px' }}>
-                      <span>Completeness Audit</span>
-                      <span style={{ fontFamily: 'var(--mono)', fontWeight: 'bold', color: 'var(--text-primary)' }}>
-                        {reportData.evidenceCompleteness || 0}%
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem', marginBottom: '8px' }}>
+                      <span>Completeness Score</span>
+                      <span style={{ fontFamily: 'var(--mono)', fontWeight: 'bold', color: 'var(--text-primary)', fontSize: '1.1rem' }}>
+                        {reportData.recommendation.confidenceScore || reportData.evidenceCompleteness || 0}%
                       </span>
                     </div>
-                    <div className="progress-container" style={{ margin: '0 0 16px 0' }}>
-                      <div className="progress-fill" style={{ 
-                        width: `${reportData.evidenceCompleteness}%`,
-                        backgroundColor: reportData.evidenceCompleteness >= 80 ? 'var(--success)' : 'var(--warning)'
-                      }}></div>
-                    </div>
-
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                      <p>Recollection Loops: {reportData.recollectionAttempts} / 2</p>
-                      <p style={{ marginTop: '4px' }}>Status: {reportData.evidenceCompleteness >= 80 ? 'Audited & Confirmed' : 'Degraded Feed (Low Completeness)'}</p>
-                    </div>
-
+                    
+                    {reportData.recommendation.confidenceReasons && (
+                      <ul className="confidence-checklist">
+                        {reportData.recommendation.confidenceReasons.map((item, idx) => (
+                          <li key={idx} className={`confidence-item status-${item.status}`}>
+                            <span className="chk-icon">{item.status === 'success' ? '✓' : item.status === 'warning' ? '⚠' : '✗'}</span>
+                            <span className="chk-text">{item.text}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    
                     {reportData.warnings && reportData.warnings.length > 0 && (
-                      <div className="warn-list">
-                        {reportData.warnings.map((w, idx) => (
+                      <div className="warn-list" style={{ marginTop: '10px' }}>
+                        {reportData.warnings.slice(0, 2).map((w, idx) => (
                           <div key={idx} className="warn-item">
                             <AlertTriangle size={14} style={{ flexShrink: 0 }} />
                             <span>{w.message}</span>
@@ -405,45 +691,87 @@ export default function App() {
                       </div>
                     )}
                   </div>
-
-                  {/* Valuation metrics */}
-                  <div className="report-card">
-                    <h2 className="report-card-title">
-                      <Calculator size={18} />
-                      Calculated Targets
-                    </h2>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                      <div>
-                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Consensus Fair Price Target</span>
-                        <p style={{ fontFamily: 'var(--mono)', fontSize: '2rem', fontWeight: '800', color: 'var(--text-primary)', margin: '4px 0 0 0' }}>
-                          ${reportData.valuation.consensusValue?.toFixed(2)}
-                        </p>
-                      </div>
-
-                      <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.03)', paddingTop: '12px' }}>
-                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Current Trading Price</span>
-                        <p style={{ fontFamily: 'var(--mono)', fontSize: '1.2rem', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
-                          ${reportData.valuation.currentPrice?.toFixed(2)}
-                        </p>
-                      </div>
-
-                      <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.03)', paddingTop: '12px' }}>
-                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Margin of Safety</span>
-                        {reportData.valuation.marginOfSafety > 0 ? (
-                          <div className="mos-alert positive">
-                            <ShieldCheck size={14} />
-                            <span>+{reportData.valuation.marginOfSafety.toFixed(1)}% Discount</span>
-                          </div>
-                        ) : (
-                          <div className="mos-alert negative">
-                            <AlertTriangle size={14} />
-                            <span>Premium Price Gap (No Safety Margin)</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
                 </div>
+
+                {/* ROW 4: Market News & Sentiment Summary + Cards */}
+                <div className="report-card">
+                  <h2 className="report-card-title">
+                    <BookOpen size={18} />
+                    Market News & Sentiment Catalysts
+                  </h2>
+                  
+                  {/* News Sentiment Summary Panel */}
+                  {(() => {
+                    const newsList = reportData.news || [];
+                    let posCount = 0; let neuCount = 0; let negCount = 0;
+                    let highCount = 0; let medCount = 0; let lowCount = 0;
+                    newsList.forEach(n => {
+                      if (n.sentiment === 'positive') posCount++;
+                      else if (n.sentiment === 'negative') negCount++;
+                      else neuCount++;
+                      if (n.materiality === 'high') highCount++;
+                      else if (n.materiality === 'medium') medCount++;
+                      else lowCount++;
+                    });
+
+                    return newsList.length > 0 ? (
+                      <>
+                        <div className="news-summary-panel">
+                          <div className="news-summary-card">
+                            <span className="summary-label">News Sentiment Balance</span>
+                            <div className="summary-indicators">
+                              <span className="summary-indicator sentiment-positive">Positive: {posCount}</span>
+                              <span className="summary-indicator sentiment-neutral">Neutral: {neuCount}</span>
+                              <span className="summary-indicator sentiment-negative">Negative: {negCount}</span>
+                            </div>
+                          </div>
+                          <div className="news-summary-card">
+                            <span className="summary-label">Material Impact Levels</span>
+                            <div className="summary-indicators">
+                              <span className="summary-indicator materiality-high">High Impact: {highCount}</span>
+                              <span className="summary-indicator materiality-medium">Medium: {medCount}</span>
+                              <span className="summary-indicator materiality-low">Low: {lowCount}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="news-card-grid" style={{ marginTop: '20px' }}>
+                          {newsList.map((item, idx) => (
+                            <div key={idx} className="news-card">
+                              <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', marginBottom: '8px' }}>
+                                  <span className="news-source">{item.source} &bull; {item.date}</span>
+                                  <div style={{ display: 'flex', gap: '4px' }}>
+                                    {item.sentiment && (
+                                      <span className={`tag-badge sentiment-${item.sentiment}`}>
+                                        {item.sentiment}
+                                      </span>
+                                    )}
+                                    {item.materiality && (
+                                      <span className={`tag-badge materiality-${item.materiality}`}>
+                                        {item.materiality}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <h4 className="news-title">{item.title}</h4>
+                                <p className="news-snippet">{item.snippet}</p>
+                              </div>
+                              {item.url && (
+                                <a href={item.url} target="_blank" rel="noreferrer" className="news-audit-link">
+                                  View Reference Article &gt;
+                                </a>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>No unstructured news found for this company.</p>
+                    );
+                  })()}
+                </div>
+
               </div>
             )}
 
@@ -459,14 +787,14 @@ export default function App() {
                   <div className="val-split-grid">
                     <div className="val-col">
                       <span className="val-col-title">Discounted Cash Flow (60% Weight)</span>
-                      <p className="val-col-price">${reportData.valuation.dcfValue?.toFixed(2)}</p>
+                      <p className="val-col-price">{currencySymbol}{reportData.valuation.dcfValue?.toFixed(2)}</p>
                       <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '8px' }}>
                         Based on Cost of Equity Ke: {reportData.valuation.assumptions.costOfEquity}% (CAPM derived).
                       </p>
                     </div>
                     <div className="val-col">
                       <span className="val-col-title">Comparable Sector Multiples (40% Weight)</span>
-                      <p className="val-col-price">${reportData.valuation.relativeValue?.toFixed(2)}</p>
+                      <p className="val-col-price">{currencySymbol}{reportData.valuation.relativeValue?.toFixed(2)}</p>
                       <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '8px' }}>
                         Uses Sector PE target Multiple ({reportData.valuation.assumptions.targetSectorPe}x) and PB ({reportData.valuation.assumptions.targetSectorPb}x).
                       </p>
@@ -500,9 +828,9 @@ export default function App() {
                         <tbody>
                           <tr>
                             <td>Projected Free Cash Flow</td>
-                            <td className="highlight">${reportData.valuation.projections.fcfArray[0]?.toFixed(1)}M</td>
+                            <td className="highlight">{currencySymbol}{reportData.valuation.projections.fcfArray[0]?.toFixed(1)}M</td>
                             {reportData.valuation.projections.fcfArray.slice(1).map((val, idx) => (
-                              <td key={idx}>${val.toFixed(1)}M</td>
+                              <td key={idx}>{currencySymbol}{val.toFixed(1)}M</td>
                             ))}
                           </tr>
                           <tr>
@@ -514,9 +842,9 @@ export default function App() {
                           </tr>
                           <tr>
                             <td>Present Value (PV) of FCF</td>
-                            <td className="highlight">${reportData.valuation.projections.presentValues[0]?.toFixed(1)}M</td>
+                            <td className="highlight">{currencySymbol}{reportData.valuation.projections.presentValues[0]?.toFixed(1)}M</td>
                             {reportData.valuation.projections.presentValues.slice(1).map((val, idx) => (
-                              <td key={idx} className="highlight">${val.toFixed(1)}M</td>
+                              <td key={idx} className="highlight">{currencySymbol}{val.toFixed(1)}M</td>
                             ))}
                           </tr>
                         </tbody>
@@ -527,19 +855,19 @@ export default function App() {
                       <div>
                         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Sum PV of Projections</span>
                         <p style={{ fontFamily: 'var(--mono)', fontSize: '1.1rem', color: 'var(--text-primary)' }}>
-                          ${(reportData.valuation.projections.totalPresentValue - reportData.valuation.projections.terminalValue).toFixed(1)}M
+                          {currencySymbol}{(reportData.valuation.projections.totalPresentValue - reportData.valuation.projections.terminalValue).toFixed(1)}M
                         </p>
                       </div>
                       <div>
                         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Perpetual Terminal Value (PV)</span>
                         <p style={{ fontFamily: 'var(--mono)', fontSize: '1.1rem', color: 'var(--text-primary)' }}>
-                          ${reportData.valuation.projections.terminalValue?.toFixed(1)}M
+                          {currencySymbol}{reportData.valuation.projections.terminalValue?.toFixed(1)}M
                         </p>
                       </div>
                       <div>
                         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Total PV of Equity Value</span>
                         <p style={{ fontFamily: 'var(--mono)', fontSize: '1.1rem', color: 'var(--text-primary)' }}>
-                          ${reportData.valuation.projections.totalPresentValue?.toFixed(1)}M
+                          {currencySymbol}{reportData.valuation.projections.totalPresentValue?.toFixed(1)}M
                         </p>
                       </div>
                     </div>

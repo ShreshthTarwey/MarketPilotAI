@@ -71,6 +71,7 @@ class YahooFinanceProvider extends IFinancialDataProvider {
       'assetProfile',
       'price',
       'summaryDetail',
+      'defaultKeyStatistics',
       'incomeStatementHistory',
       'balanceSheetHistory',
       'cashflowStatementHistory',
@@ -111,6 +112,12 @@ class YahooFinanceProvider extends IFinancialDataProvider {
     const profile = summary.assetProfile || {};
     const price = summary.price || {};
     const detail = summary.summaryDetail || {};
+    const stats = summary.defaultKeyStatistics || {};
+
+    const ceoOfficer = (profile.companyOfficers || []).find(o => 
+      o.title && (o.title.toLowerCase().includes('ceo') || o.title.toLowerCase().includes('chief executive officer'))
+    );
+    const ceo = ceoOfficer ? ceoOfficer.name : (profile.companyOfficers?.[0]?.name || null);
 
     return {
       ticker: ticker.trim().toUpperCase(),
@@ -120,9 +127,19 @@ class YahooFinanceProvider extends IFinancialDataProvider {
       description: profile.longBusinessSummary || 'No description available.',
       marketCap: this._val(detail.marketCap || price.marketCap),
       currentPrice: this._val(price.regularMarketPrice || detail.previousClose),
-      beta: this._val(detail.beta || summary.defaultKeyStatistics?.beta),
+      beta: this._val(detail.beta || stats.beta),
       country: profile.country || 'Unknown Country',
-      website: profile.website || 'No website available.'
+      website: profile.website || 'No website available.',
+      currency: price.currency || detail.currency || null,
+      
+      // New snapshots:
+      employees: profile.fullTimeEmployees || null,
+      ceo: ceo,
+      exchange: price.exchangeName || null,
+      headquarters: profile.city ? `${profile.city}${profile.state ? ', ' + profile.state : ''}${profile.country ? ', ' + profile.country : ''}` : null,
+      peRatio: this._val(detail.trailingPE || detail.forwardPE) || null,
+      eps: this._val(detail.trailingEps || stats.trailingEps || stats.earningsShare) || null,
+      founded: profile.founded || null
     };
   }
 

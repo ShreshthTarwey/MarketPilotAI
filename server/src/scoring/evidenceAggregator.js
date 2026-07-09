@@ -138,7 +138,76 @@ function aggregateEvidence(state) {
   };
 }
 
+/**
+ * Explains why the confidence score is high or low with 5-6 concise checklist items.
+ * 
+ * @param {Object} state - The combined evidence state
+ * @returns {Array<Object>} Checklist items explaining confidence.
+ */
+function getConfidenceExplanation(state) {
+  const reasons = [];
+  
+  // Profile check
+  const profile = state.profile || {};
+  const hasDesc = !!profile.description && profile.description !== 'No description available.';
+  const hasSnapshot = !!profile.ceo && !!profile.employees && !!profile.exchange;
+  if (hasDesc && hasSnapshot) {
+    reasons.push({ text: "Complete Corporate Metadata & Profile", status: "success" });
+  } else {
+    reasons.push({ text: "Partial Corporate Profile Metadata", status: "warning" });
+  }
+
+  // Financial statements check
+  const financials = state.financials || {};
+  const incomeCount = (financials.annualIncomeStatement || []).length;
+  const balanceCount = (financials.annualBalanceSheet || []).length;
+  const cashFlowCount = (financials.annualCashFlow || []).length;
+  if (incomeCount > 0 && balanceCount > 0 && cashFlowCount > 0) {
+    reasons.push({ text: "Complete Financial Statement Filing Series", status: "success" });
+  } else {
+    reasons.push({ text: "Partial / Patchy Financial Statement Series", status: "warning" });
+  }
+
+  // News check
+  const newsList = state.news || [];
+  if (newsList.length >= 3) {
+    reasons.push({ text: `Substantial News Catalysts Retrieved (${newsList.length} articles)`, status: "success" });
+  } else if (newsList.length > 0) {
+    reasons.push({ text: `Limited News Catalysts Available (${newsList.length} articles)`, status: "warning" });
+  } else {
+    reasons.push({ text: "No News Catalysts Found", status: "error" });
+  }
+
+  // Recollection loops
+  const attempts = state.recollectionAttempts || 0;
+  if (attempts === 0) {
+    reasons.push({ text: "No Data Recollection Loops Required", status: "success" });
+  } else {
+    reasons.push({ text: `Data Restored via Quality Gate Recollection`, status: "warning" });
+  }
+
+  // Model alignment check
+  const valuation = state.valuation || {};
+  const currentPrice = state.marketContext?.currentPrice || valuation.currentPrice;
+  const dcfVal = valuation.dcfValue;
+  const relativeVal = valuation.relativeValue;
+  if (dcfVal && relativeVal && currentPrice) {
+    const dcfIsBuy = dcfVal > currentPrice;
+    const relIsBuy = relativeVal > currentPrice;
+    if (dcfIsBuy === relIsBuy) {
+      reasons.push({ text: "Valuation Models Aligned (DCF & Comps agree)", status: "success" });
+    } else {
+      reasons.push({ text: "Valuation Model Disagreement (DCF vs Comps)", status: "warning" });
+    }
+  } else {
+    reasons.push({ text: "Incomplete Valuation Model Multiples", status: "warning" });
+  }
+
+  return reasons;
+}
+
 module.exports = {
   aggregateEvidence,
-  calculateConfidence
+  calculateConfidence,
+  getConfidenceExplanation
 };

@@ -881,6 +881,11 @@ a:hover {
 .tag-badge {
   display: inline-flex;
   align-items: center;
+  text-transform: uppercase;
+  font-size: 0.55rem;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-weight: bold;
 }
 
 .sentiment-positive {
@@ -917,4 +922,434 @@ a:hover {
   background-color: rgba(255, 255, 255, 0.03);
   color: var(--text-muted);
   border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* AI Risks List styling */
+.ai-risks-section {
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  padding-top: 20px;
+  margin-top: 10px;
+}
+
+.ai-risks-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.ai-risks-title svg {
+  color: #ff7b72;
+}
+
+.ai-risks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.ai-risk-item {
+  display: flex;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.risk-bullet {
+  color: #ff7b72;
+  font-weight: bold;
+}
+
+.thesis-paragraph {
+  margin-bottom: 16px;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.thesis-paragraph:last-child {
+  margin-bottom: 0;
+}
+
+/* Market News & Catalysts Grid */
+.news-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.news-card {
+  background-color: rgba(255, 255, 255, 0.015);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+  transition: all 0.2s ease-in-out;
+}
+
+.news-card:hover {
+  background-color: rgba(255, 255, 255, 0.025);
+  border-color: rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
+}
+
+.news-source {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-family: var(--mono);
+}
+
+.news-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.4;
+  margin: 8px 0 6px 0;
+}
+
+.news-snippet {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.news-audit-link {
+  font-size: 0.75rem;
+  color: var(--info);
+  text-decoration: none;
+  font-weight: 500;
+  align-self: flex-start;
+  transition: color 0.15s;
+}
+
+.news-audit-link:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+}
+
+/* Company Snapshot Grid */
+.snapshot-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.snapshot-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.snapshot-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.snapshot-value {
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.snapshot-link {
+  color: var(--info);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.snapshot-link:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+}
+
+/* Key Financial Metrics Grid */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.metric-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background-color: rgba(255, 255, 255, 0.01);
+  border: 1px solid rgba(255, 255, 255, 0.02);
+  border-radius: 4px;
+  padding: 12px;
+}
+
+.metric-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.metric-value {
+  font-size: 1.1rem;
+  font-family: var(--mono);
+  color: var(--text-primary);
+  font-weight: bold;
+}
+
+/* Score Breakdown Table */
+.score-breakdown-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+
+.score-breakdown-table th {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  padding: 8px 12px;
+  font-weight: 600;
+}
+
+.score-breakdown-table td {
+  padding: 10px 12px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+.score-breakdown-table tr:hover td {
+  background-color: rgba(255, 255, 255, 0.01);
+}
+
+.score-breakdown-table .modifier-row td {
+  font-size: 0.8rem;
+  background-color: rgba(255, 255, 255, 0.005);
+}
+
+.score-breakdown-table .total-row td {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: none;
+  padding-top: 14px;
+}
+
+/* Research Confidence Checklist */
+.confidence-checklist {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.confidence-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.confidence-item .chk-icon {
+  font-weight: bold;
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+}
+
+.confidence-item.status-success {
+  color: var(--text-primary);
+}
+.confidence-item.status-success .chk-icon {
+  color: var(--success);
+}
+
+.confidence-item.status-warning {
+  color: var(--text-secondary);
+}
+.confidence-item.status-warning .chk-icon {
+  color: var(--warning);
+}
+
+.confidence-item.status-error {
+  color: var(--text-muted);
+}
+.confidence-item.status-error .chk-icon {
+  color: var(--error);
+}
+
+/* News Catalysts Summary Panel */
+.news-summary-panel {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.news-summary-card {
+  flex: 1;
+  background-color: rgba(255, 255, 255, 0.01);
+  border: 1px solid rgba(255, 255, 255, 0.02);
+  border-radius: 6px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.summary-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.summary-indicators {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.summary-indicator {
+  font-size: 0.75rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+/* Recommendation Summary drivers card */
+.rec-summary-box {
+  background-color: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-top: 12px;
+  width: 100%;
+}
+
+.rec-summary-title {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: bold;
+  display: block;
+  margin-bottom: 6px;
+  text-align: left;
+}
+
+.rec-summary-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+}
+
+.rec-summary-item {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  position: relative;
+  padding-left: 10px;
+}
+
+.rec-summary-item::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  color: var(--success);
+}
+
+.report-rating-badge.sell .rec-summary-item::before {
+  color: var(--error);
+}
+
+.report-rating-badge.hold .rec-summary-item::before {
+  color: var(--warning);
+}
+
+/* Floating Error Toast Notification styles */
+.error-toast-container {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  width: 90%;
+  max-width: 480px;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    top: 40px;
+    opacity: 0;
+  }
+  to {
+    top: 80px;
+    opacity: 1;
+  }
+}
+
+.error-toast-card {
+  background-color: rgba(20, 20, 20, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(248, 81, 73, 0.3);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 16px rgba(248, 81, 73, 0.05);
+  padding: 16px;
+}
+
+.error-toast-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding-bottom: 8px;
+}
+
+.error-toast-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.error-toast-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.3rem;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.error-toast-close:hover {
+  color: var(--text-primary);
+}
+
+.error-toast-body {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin: 0;
 }

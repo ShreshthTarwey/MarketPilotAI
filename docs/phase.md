@@ -139,6 +139,32 @@ Established config validation (`env.js`), graph channels (`state.js`), and abstr
 ### Phase 2: Data & Provider Layer (Complete)
 Implemented cache singleton, ticker autocompletes, Tavily search connectors, SEC EDGAR XBRL scrapers, Yahoo Chart historical downloaders, and the master router's field-level recovery cascade.
 
+#### A. In-Memory Cache System (No Database Architecture)
+Since there is no external database like Redis or MongoDB, the caching mechanism is implemented entirely in-memory using the Node.js process RAM:
+*   **Singleton Memory Store:** The cache module ([memoryCache.js](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/providers/cache/memoryCache.js)) exports a single, globally instantiated singleton class that holds a private JavaScript `Map` object: `this.store = new Map();`. Because the Node.js server process runs continuously in the background, the state of this `Map` is preserved across all HTTP API requests.
+*   **Time-To-Live (TTL) & Expiries:** When saving a key (e.g. `yahoo-financials:AAPL`), it assigns an expiry timestamp `Date.now() + duration`. During lookup, it compares the current time against the key's expiry. If expired, it deletes the key and returns `null`.
+*   **Memory Leak Auto-Pruning:** A background garbage-collection timer runs every 5 minutes using `setInterval` to scan the store, prune expired entries, and release memory automatically.
+*   **Cache Clearing Route:** We exposed a POST endpoint `/api/cache/clear` in [index.js](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/index.js) that calls `cache.clear()` to purge all cached objects on-demand, making it easy to reset states during testing.
+
+#### B. Manual Verification Steps for Cache
+1.  **Start Server:** Launch the server inside `server/` with `node index.js`.
+2.  **Initial Run (Cache Miss):** Query `AAPL` in the React search bar. Look at the server terminal logs to see:
+    ```text
+    [Yahoo Finance]: Fetching QuoteSummary modules for "AAPL"
+    [Cache]: Saved key: yahoo-financials:AAPL (TTL: 3600000ms)
+    ```
+    *The first load requires active network requests and takes 1–3 seconds.*
+3.  **Repeat Run (Cache Hit):** Click "Back to Search" and query `AAPL` again. The data loads instantly (<50ms). Look at the logs:
+    ```text
+    [Cache]: Hit for key: company-resolution:AAPL
+    [Cache]: Hit for key: yahoo-financials:AAPL
+    ```
+4.  **Clear Cache:** Send a POST request to clear the RAM store:
+    *   *PowerShell:* `Invoke-RestMethod -Uri http://localhost:5000/api/cache/clear -Method Post`
+    *   *Bash/Curl:* `curl -X POST http://localhost:5000/api/cache/clear`
+    The server will log `[Cache]: Cache cleared completely.`
+5.  **Verify Reset:** Query `AAPL` a third time. The request will trigger a cache miss and execute fresh API calls.
+
 ### Phase 3: LangGraph Orchestration Layer (Complete)
 Built the service layer, single-responsibility nodes, input validation, evidence aggregator diagnostics, compiled StateGraph with conditional routing, and verification tests.
 
@@ -621,6 +647,27 @@ We conducted comprehensive end-to-end integration testing and verified the logic
 *   **Proxy and SSL Bypass:** Confirmed connection bypasses for enterprise firewall intercepts (e.g. Sophos).
 *   **Completeness Audits:** Handled graph state warning cleansers to avoid showing stale missing-data alerts once data was recollected.
 *   **Safety Overrides:** Capped distressed companies with heavy cash-burn to Sell ratings.
+*   **Dynamic Currency Resolution:** Implemented dynamic stock currency resolution by pulling `currency` from Yahoo Finance's `price`/`summaryDetail` modules. Designed a suffix-based fallback parser (e.g., `.NS`/`.BO` for `INR` / `₹`, `.L` for `GBP` / `£`, `.DE`/`.PA` for `EUR` / `€`, defaulting to `USD` / `$`) to guarantee reliable offline resolving. Replaced hardcoded currency labels in the React frontend with dynamic symbol rendering.
+
+---
+
+### Phase 8: Institutional UI/UX Refinement & Transparency
+We refined the frontend to transform the dashboard into an institutional-grade investment research platform. The focus was to improve explainability, user trust, and transparency.
+
+#### A. New UI Components & Source Fields
+1.  **Company Snapshot Card:** Displays factual company metadata (`CEO`, `Employees`, `Headquarters`, `Exchange`, `Country`, `Website`, `Founded Year`, `Market Cap`) extracted from Yahoo Finance's `assetProfile`, `price`, and `summaryDetail` modules. It handles missing values gracefully by hiding them in the grid.
+2.  **Key Financial Metrics Card:** Displays fundamental key ratios (`P/E Ratio`, `EPS`, `ROE`, `Revenue Growth`, `Operating Margin`, `Current Ratio`, `Debt-to-Equity`, `Free Cash Flow`) formatted with proper units.
+3.  **Multi-Factor Score Breakdown Table:** A compact tabular layout displaying raw scores, weights, and weighted contributions for each factor category. It shows exactly how the overall consolidated score of `X / 100` was formed, including dynamic normalization when valuation is unavailable.
+4.  **Research Confidence Checklist:** A concise 5-6 item checklist summarizing profile completeness, statement filers, news catalysts coverage, recollection loops, and model alignment.
+5.  **Recommendation Summary Drivers Card:** A compact block displaying 3-5 deterministic decision bullet points (e.g., "Strong profitability", "Robust solvency") directly below the Intrinsic Decision badge.
+6.  **News Sentiment & Materiality Summary:** Summarizes Positive/Neutral/Negative counts and High/Medium/Low impact levels above the article cards grid.
+7.  **Last Updated Timestamp & Description:** Displays the compilation date/time and a short business description underneath the main header.
+
+#### B. Backend Data Contracts & Formulas
+*   **ROE (Return on Equity):** Calculated deterministically inside `computeScores.js` using `(netIncome / totalEquity) * 100`.
+*   **Exposed Ratios:** Exposed `roe` and `freeCashFlow` in `scores.ratios` returned by the LangGraph orchestrator.
+*   **Confidence Checklist Helper:** Added `getConfidenceExplanation(state)` to `evidenceAggregator.js` to return dynamic audit rules.
+*   **Metadata Scrapers:** Add `'defaultKeyStatistics'` module query in `yahooFinance.js` to obtain raw `trailingEps`, `trailingPE`, and `fullTimeEmployees` fields. Instructed LLM scraping fallback to only extract snapshot fields if explicitly stated in search results (preventing hallucinations).
 
 
 

@@ -268,11 +268,32 @@ Do not return any surrounding text. Do not invent symbols. Suggest only real pub
 
     // Step 5: If resolution fails completely, return suggestions from Yahoo autocomplete
     const yahooSuggestions = (quotes || [])
-      .slice(0, 3)
-      .map(q => q.shortname || q.longname || q.symbol)
-      .filter(name => !!name);
+      .slice(0, 4)
+      .map(q => ({
+        ticker: q.symbol,
+        name: q.shortname || q.longname || q.symbol,
+        exchange: q.exchange
+      }));
 
-    const finalSuggestions = [...new Set([...suggestedNames, ...yahooSuggestions])].slice(0, 4);
+    const finalSuggestions = [];
+    const seenTickers = new Set();
+
+    for (const item of yahooSuggestions) {
+      if (item.ticker && !seenTickers.has(item.ticker)) {
+        seenTickers.add(item.ticker);
+        finalSuggestions.push(item);
+      }
+    }
+
+    for (const item of suggestions) {
+      if (item.ticker && !seenTickers.has(item.ticker)) {
+        seenTickers.add(item.ticker);
+        finalSuggestions.push({
+          ticker: item.ticker,
+          name: item.name || item.ticker
+        });
+      }
+    }
 
     const failResult = {
       success: false,
@@ -281,7 +302,7 @@ Do not return any surrounding text. Do not invent symbols. Suggest only real pub
       exchange: null,
       market: 'Global',
       resolutionConfidence: 0.0,
-      suggestions: finalSuggestions,
+      suggestions: finalSuggestions.slice(0, 4),
       warning: `Could not resolve company symbol for "${query}".`
     };
 

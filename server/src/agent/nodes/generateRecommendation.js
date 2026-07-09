@@ -6,7 +6,7 @@
  */
 
 const LLMRouter = require('../../providers/llmRouter');
-const { calculateConfidence } = require('../../scoring/evidenceAggregator');
+const { calculateConfidence, getConfidenceExplanation } = require('../../scoring/evidenceAggregator');
 const llm = new LLMRouter();
 
 /**
@@ -107,6 +107,9 @@ You must output STRICTLY a JSON object matching this schema:
 Return only JSON. Do not write markdown quotes or conversational prefixes.
 `;
 
+  const confidenceReasons = getConfidenceExplanation(state);
+  const lastUpdated = new Date().toISOString();
+
   try {
     const { data } = await llm.generateJSON(prompt);
     
@@ -114,11 +117,14 @@ Return only JSON. Do not write markdown quotes or conversational prefixes.
     data.targetPrice = valuation.consensusValue;
     data.confidenceScore = confidenceScore;
     data.rating = breakdown.rating;
+    data.confidenceReasons = confidenceReasons;
+    data.lastUpdated = lastUpdated;
 
     console.log(`[Graph Node]: Investment report compiled. Recommendation rating: ${data.rating}`);
 
     return {
       recommendation: data,
+      lastUpdated: lastUpdated,
       executionStage: 'completed'
     };
   } catch (err) {
@@ -130,11 +136,14 @@ Return only JSON. Do not write markdown quotes or conversational prefixes.
       targetPrice: valuation.consensusValue,
       investmentThesis: `Quantitative scorecard calculation returned a score of ${scores.overallScore}/100. However, the qualitative synthesis failed due to: ${err.message}`,
       risks: ["System processing limits", "LLM fallback triggered"],
-      confidenceScore: confidenceScore
+      confidenceScore: confidenceScore,
+      confidenceReasons: confidenceReasons,
+      lastUpdated: lastUpdated
     };
 
     return {
       recommendation: fallbackRec,
+      lastUpdated: lastUpdated,
       warnings: [{
         code: 'LLM_RECOMMENDATION_FAILED',
         message: err.message,

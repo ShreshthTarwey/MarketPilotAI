@@ -92,6 +92,20 @@ async function computeScoresNode(state) {
     solvencyScore = Math.round(solvencyPoints);
   }
 
+  // ROE calculation (Net Income / Total Equity)
+  let roe = 0;
+  if (income.length > 0 && balance.length > 0) {
+    const latestIncome = income[0];
+    const latestBalance = balance[0];
+    const netIncome = latestIncome.netIncome || 0;
+    const totalLiab = latestBalance.totalLiabilities || 0;
+    const totalAssets = latestBalance.totalAssets || 0;
+    const equity = latestBalance.totalEquity || (totalAssets - totalLiab) || 1;
+    if (equity && equity !== 0) {
+      roe = (netIncome / equity) * 100;
+    }
+  }
+
   // 3. Momentum / Trend calculations from historical prices
   let momentumScore = 50;
   let priceTrend = 'Neutral';
@@ -292,7 +306,9 @@ async function computeScoresNode(state) {
       revenueGrowth: parseFloat(revenueGrowth.toFixed(2)),
       currentRatio: parseFloat(currentRatio.toFixed(2)),
       debtToEquity: parseFloat(debtToEquity.toFixed(2)),
-      priceTrend
+      priceTrend,
+      roe: parseFloat(roe.toFixed(2)),
+      freeCashFlow: fcfBase
     }
   };
 
