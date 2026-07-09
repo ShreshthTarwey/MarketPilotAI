@@ -66,51 +66,72 @@ export default function ValuationTab({ reportData, currencySymbol, activeTab }) 
 
       {/* Multi-Factor Ratios Checklist */}
       <div className="stitch-card table-card" style={{ marginTop: '20px' }}>
-        <h2 className="stitch-card-title">Multi-Factor Scoring Engine Metrics</h2>
+        <h2 className="stitch-card-title">Multi-Factor Scoring Engine Metrics & Contributions</h2>
         <div className="table-scroll">
           <table className="stitch-table">
             <thead>
               <tr>
                 <th>Subscore Category</th>
-                <th>Calculated Value</th>
+                <th>Score</th>
                 <th>Weight</th>
-                <th>Factor Status</th>
+                <th>Contribution</th>
               </tr>
             </thead>
             <tbody>
               {(() => {
-                const r = reportData.scores?.ratios || {};
+                const breakdown = reportData.scores?.breakdown || {};
+                const valScore = breakdown.valuationScore !== null && breakdown.valuationScore !== undefined ? breakdown.valuationScore : 50;
+                const finScore = breakdown.financialsScore || 50;
+                const momScore = breakdown.momentumScore || 50;
+                const newsScore = breakdown.newsScore || 50;
+                const safetyScore = breakdown.safetyScore || 50;
                 return (
                   <>
                     <tr>
-                      <td>Solvency Ratios (Current / Debt-Equity)</td>
-                      <td className="font-mono">{r.currentRatio?.toFixed(2)}x current / {r.debtToEquity?.toFixed(2)}x D/E</td>
-                      <td>35%</td>
-                      <td className={reportData.scores.solvencyScore >= 70 ? 'text-success bold' : 'text-warning'}>
-                        Score: {reportData.scores.solvencyScore !== undefined ? reportData.scores.solvencyScore : 50}/100
+                      <td>Valuation Target Upside (DCF & multiples consensus)</td>
+                      <td className="font-mono">{valScore}%</td>
+                      <td>30%</td>
+                      <td className="font-mono bold text-accent">
+                        {Math.round((valScore / 100) * 30)} / 30
                       </td>
                     </tr>
                     <tr>
-                      <td>Profitability Ratios (ROE / Op Margin)</td>
-                      <td className="font-mono">{r.roe?.toFixed(1)}% ROE / {r.operatingMargin?.toFixed(1)}% margin</td>
-                      <td>45%</td>
-                      <td className={reportData.scores.profitabilityScore >= 70 ? 'text-success bold' : 'text-warning'}>
-                        Score: {reportData.scores.profitabilityScore !== undefined ? reportData.scores.profitabilityScore : 50}/100
+                      <td>Financial Statement Health (Solvency & Profitability average)</td>
+                      <td className="font-mono">{finScore}%</td>
+                      <td>30%</td>
+                      <td className="font-mono bold text-accent">
+                        {Math.round((finScore / 100) * 30)} / 30
                       </td>
                     </tr>
                     <tr>
-                      <td>Momentum & Sales Trend</td>
-                      <td className="font-mono">PE: {reportData.profile.peRatio?.toFixed(1) || 'N/A'}x / EPS: {currencySymbol}{reportData.profile.eps?.toFixed(2) || 'N/A'}</td>
-                      <td>20%</td>
-                      <td className={reportData.scores.momentumScore >= 70 ? 'text-success bold' : 'text-warning'}>
-                        Score: {reportData.scores.momentumScore !== undefined ? reportData.scores.momentumScore : 50}/100
+                      <td>Price Momentum & Sales Trend</td>
+                      <td className="font-mono">{momScore}%</td>
+                      <td>15%</td>
+                      <td className="font-mono bold text-accent">
+                        {Math.round((momScore / 100) * 15)} / 15
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>Unstructured News Sentiment Audit</td>
+                      <td className="font-mono">{newsScore}%</td>
+                      <td>10%</td>
+                      <td className="font-mono bold text-accent">
+                        {Math.round((newsScore / 100) * 10)} / 10
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>Safety / Risk Mitigation (Solvency & FCF Penalties)</td>
+                      <td className="font-mono">{safetyScore}%</td>
+                      <td>15%</td>
+                      <td className="font-mono bold text-accent">
+                        {Math.round((safetyScore / 100) * 15)} / 15
                       </td>
                     </tr>
                     <tr className="summary-row">
                       <td className="bold">Overall Scorecard Grade</td>
                       <td className="bold text-accent font-mono">{reportData.scores?.overallScore?.toFixed(1)} / 100</td>
                       <td className="bold">100%</td>
-                      <td className="bold text-accent">{reportData.scores?.ratingRecommendation || 'HOLD'}</td>
+                      <td className="bold text-accent">{reportData.recommendation?.rating || 'HOLD'}</td>
                     </tr>
                   </>
                 );

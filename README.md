@@ -1,15 +1,18 @@
 # MarketPilot AI — AI Investment Research Agent
 
-MarketPilot AI is a production-oriented AI Investment Research Agent designed to autonomously research global equities (US, Indian, and Global), compute deterministic health/growth metrics, validate evidence quality, and generate human-in-the-loop explainable investment recommendations ("Invest" or "Pass").
+MarketPilot AI is a production-oriented AI Investment Research Agent designed to autonomously research global equities (US, Indian, and Global), compute deterministic health/growth metrics, validate evidence quality, and generate human-in-the-loop explainable investment recommendations ("Buy", "Hold", or "Sell").
 
 ---
 
 ## Technical Stack
-*   **Frontend:** React (Vite) + Vanilla CSS (Dynamic Glassmorphic Design)
-*   **Backend:** Node.js + Express
-*   **Workflow Engine:** LangGraph.js (State-driven workflow orchestrator)
-*   **LLM Provider:** Groq (Llama 3.3 70B) with Gemini API key rotation fallbacks
-*   **Data Channels:** `yahoo-finance2` (Primary Financials/Metadata) + Tavily Search API (Fallback Scraping & News)
+*   **Frontend:** React, Vite, SVG Charts, CSS (Dynamic Light / Dark Mode Toggle)
+*   **Backend:** Node.js, Express
+*   **AI Orchestration:** LangGraph.js, LangChain.js, Google Gemini, Groq (Llama-3.3-70B)
+*   **Financial Data:** Yahoo Finance (`yahoo-finance2`), SEC EDGAR
+*   **News:** Tavily Search API
+*   **Caching:** In-memory Singleton Cache
+*   **Validation:** Similarity Gate, Levenshtein Distance
+*   **Documentation:** Mermaid diagrams
 
 ---
 
@@ -77,69 +80,59 @@ To guarantee the reliability of individual data retrievers prior to graph orches
 
 ---
 
-## Systems Architecture Diagram
+## High-Level System Architecture Diagram
 
 ```mermaid
 flowchart TD
-    Client([React Frontend / Client]) -->|GET /api/resolve| APIResolve[Express resolve Endpoint]
-    Client -->|GET/POST /api/research| APIResearch[Express research Endpoint]
+    User([User]) -->|Search Query| UI[React Frontend / Search UI]
+    UI -->|GET /api/research| API[Express API Gateway]
     
-    APIResolve -->|autocomplete lookup| Resolver[companyResolver.js]
-    Resolver -->|returns ticker| APIResolve
-    APIResolve -->|JSON ticker response| Client
+    API -->|Initialize Graph State| Orchestrator[LangGraph Orchestrator]
+    Orchestrator -->|Node 1: Validate| ValNode[Input Validation]
+    ValNode -->|Node 2: Resolve| ResNode[Company Resolution]
     
-    APIResearch -->|State Inits| Node0[validateInputNode]
-    Node0 -->|Passed| Node1[resolveCompanyNode]
-    Node1 -->|Evidence Service| Resolver
+    ResNode -->|Check Memory Cache| Cache{Cache Hit?}
+    Cache -->|No| Resolver[companyResolver.js / Autocomplete API]
+    Resolver -->|LLM Autocorrect Fallback| LLMRouter[llmRouter.js]
+    Cache -->|Yes| Orchestrator
     
-    Node1 --> Node2[collectEvidenceNode]
-    Node2 -->|Parallel concurrent sweeps| Service2[EvidenceService]
-    Service2 -->|cascades fallback router| Router[providerRouter.js]
+    ResNode -->|Node 3: Ingest| CollNode[Evidence Collection]
+    CollNode -->|Coordinate Cascades| Router[providerRouter.js]
     
-    Node2 -->|Normalizes and logs provenance| Aggregator[evidenceAggregator.js]
-    Aggregator -->|returns confidence| Node2
+    Router -->|Primary Query| YF[Yahoo Finance API]
+    Router -->|US Filings Fallback| SEC[SEC EDGAR Scraper]
+    Router -->|News & Fallback Scraping| Tavily[Tavily Search API]
     
-    Node2 --> Node3[evaluateQualityNode]
-    Node3 -->|Runs quality diagnostics| Gate[scoring/qualityGate.js]
+    CollNode -->|Normalize / Deduplicate| Aggregator[evidenceAggregator.js]
+    Aggregator -->|Calculate Quality score| Quality{Quality Gate >= 80%?}
     
-    Node3 --> Edge{Completeness >= 80% <br> or Loop >= 2?}
+    Quality -->|No & Loop < 2| Recollect[Node 4: Recollect Missing]
+    Recollect -->|Targeted Patching| Router
+    Router --> CollNode
     
-    Edge -->|No| Node4[recollectMissingNode]
-    Node4 -->|targeted recollection cascade| Service2
-    Node4 -->|Loops back| Node3
+    Quality -->|Yes / Exhausted| ScoreNode[Node 5: Compute Scores]
+    ScoreNode -->|JS Deterministic Math| Calculator[valuationCalculator.js]
+    Calculator -->|CAPM Cost of Equity / 5Y DCF / Comps| ScoreNode
     
-    Edge -->|Yes| Node5[computeScoresNode]
-    Node5 -->|profitability/solvency ratios| Node5
+    ScoreNode --> RecNode[Node 6: Generate Recommendation]
+    RecNode -->|Explain Math & News| LLMSynth[LLM Qualitative Synthesis]
     
-    Node5 --> Node55[computeValuationNode]
-    Node55 -->|CAPM Cost of Equity / DCF / Comps multiples| Calculator[scoring/valuationCalculator.js]
-    Calculator -->|uses macro policy guidelines| Config[valuationConfig.js]
+    RecNode --> Formatter[Response Formatter]
+    Formatter -->|JSON Report Payload| API
+    API -->|HTTP 200 JSON| UI
+    UI -->|Render Dashboard| Dashboard[Interactive Dashboard Report]
+    Dashboard -->|Print to PDF| PDF[Printable Report]
     
-    Node55 --> Node6[generateRecommendationNode]
-    Node6 -->|qualitative prompt constraints| LLM[llmRouter.js]
-    
-    Node6 --> End([State Completed])
-    End -->|returns structured report| APIResearch
-    APIResearch -->|HTTP 200 JSON Response| Client
-    
-    style Client fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
-    style End fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
-    style Resolver fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
-    style Router fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
-    style Gate fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
-    style Calculator fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
-    style LLM fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
-    style Config fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#fff
-    style Edge fill:#374151,stroke:#4b5563,stroke-width:1px,color:#fff
-    
-    style Node0 fill:#ffe6cc,stroke:#ea580c,stroke-width:2px,color:#431407
-    style Node1 fill:#d4ebf2,stroke:#0891b2,stroke-width:2px,color:#083344
-    style Node2 fill:#d4ebf2,stroke:#0891b2,stroke-width:2px,color:#083344
-    style Node4 fill:#d4ebf2,stroke:#0891b2,stroke-width:2px,color:#083344
-    style Node3 fill:#ffe6cc,stroke:#ea580c,stroke-width:2px,color:#431407
-    style Node5 fill:#d5e8d4,stroke:#16a34a,stroke-width:2px,color:#052e16
-    style Node55 fill:#d5e8d4,stroke:#16a34a,stroke-width:2px,color:#052e16
-    style Node6 fill:#e1d5e7,stroke:#9333ea,stroke-width:2px,color:#3b0764
+    style User fill:#0f172a,stroke:#3b82f6,color:#fff
+    style UI fill:#1e293b,stroke:#475569,color:#fff
+    style API fill:#1e293b,stroke:#475569,color:#fff
+    style Orchestrator fill:#1e293b,stroke:#475569,color:#fff
+    style Cache fill:#334155,stroke:#64748b,color:#fff
+    style Quality fill:#334155,stroke:#64748b,color:#fff
+    style YF fill:#0f172a,stroke:#3b82f6,color:#fff
+    style SEC fill:#0f172a,stroke:#3b82f6,color:#fff
+    style Tavily fill:#0f172a,stroke:#3b82f6,color:#fff
+    style Dashboard fill:#1e293b,stroke:#475569,color:#fff
 ```
 
 ---
@@ -176,253 +169,3 @@ An intermediate layer that normalizes multi-provider shapes, removes duplicates,
 
 ### Deterministic Confidence Scoring
 Calculated in JavaScript (not the LLM) based on evidence completeness, fallback levels triggered, missing critical variables, and provider weights.
-
----
-
-## System Architecture (Phase 5 Complete)
-
-MarketPilot AI is built on a decoupling of structured data collection, math calculations, and LLM reasoning. The pipeline flows linearly from request receipt to final report response:
-
-### 1. High-Level Architecture Flow
-
-```text
-         React Frontend
-               │
-               ▼
-        Express REST API
-               │
-               ▼
-     LangGraph Orchestrator
-               │
-               ▼
-          State Graph
-               │
- ┌─────────────┼─────────────┐
- │             │             │
- ▼             ▼             ▼
-Validation  Resolution  Evidence Collection
-               │
-               ▼
-      Evidence Aggregator
-               │
-               ▼
-       Quality Evaluation
-               │
-               ▼
-      Quantitative Scoring
-               │
-               ▼
- Deterministic Valuation Engine
-               │
-               ▼
-     Recommendation Decision
-               │
-               ▼
-   LLM Qualitative Synthesis
-               │
-               ▼
-    Structured JSON Response
-               │
-               ▼
-        React Dashboard
-```
-
----
-
-### 2. Layer-by-Layer Explanation
-
-#### Layer 1: Frontend (Client Layer)
-*   **Purpose:** Provides a premium, interactive user interface.
-*   **Why it exists:** Visualizes the research outcomes so investors can audit ratings, financials, and assumptions.
-*   **Key Components:**
-    *   *Search & Autocomplete:* Sends lookup requests to check tickers before analyzing.
-    *   *Interactive Dashboard:* Displays core scorecards, leverage ratings, and recovery logs.
-    *   *DCF & Comps Charts:* Visualizes projected cash flows, WACC/CAPM rates, and multiples.
-    *   *Recommendation Card:* Shows the final rating (Buy/Hold/Sell) and the qualitative investment thesis.
-*   **Implementation Location:** Root `client/` folder.
-
-#### Layer 2: Express API (API Gateway)
-*   **Purpose:** Houses endpoints, handles CORS, processes JSON, and formats REST outputs.
-*   **Why it exists:** Acts as the gateway connecting external web clients to the orchestrator.
-*   **Endpoints:**
-    *   `GET /api/resolve?company=<query>`: Invokes the `CompanyResolver` to return resolved tickers and names.
-    *   `GET/POST /api/research?company=<query>`: Inits state, invokes the StateGraph, and handles route execution.
-*   **Implementation Location:** [`server/index.js`](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/index.js), [`server/src/config/errorHandler.js`](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/config/errorHandler.js).
-
-#### Layer 3: LangGraph (Orchestration Layer)
-*   **Purpose:** Orchestrates execution nodes, conditional routes, loops, and state merges.
-*   **Why it exists:** Ensures reliable, stateful execution and manages targeted recollection cascades.
-*   **Orchestrator Components:** Uses state channels, conditional edges, and reducer functions to pass data between nodes.
-*   **Implementation Location:** [`server/src/agent/graph.js`](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/agent/graph.js), [`server/src/agent/state.js`](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/agent/state.js).
-
-#### Layer 4: State (Context Store)
-*   **Purpose:** Holds the current variables during the lifecycle of the graph execution.
-*   **Why it exists:** Serves as the single source of truth passed through nodes.
-*   **State Schema:** Tracks resolved company identities, profile metrics, annual financial statements, collected news articles, quality reports, scorecard subscores, quantitative valuations, final recommendations, and provider logs.
-*   **Implementation Location:** [`server/src/agent/state.js`](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/agent/state.js).
-
-#### Layer 5: Evidence Collection (Ingestion Layer)
-*   **Purpose:** Sweeps public APIs concurrently to collect raw evidence records.
-*   **Why it exists:** Fetches financial statistics and company details.
-*   **Integrations:**
-    *   *Yahoo Finance API:* Fetches profiles, valuations, and time-series records.
-    *   *Tavily Search API:* Resolves news headlines and scrapes unstructured metrics.
-    *   *Company Resolver:* Performs direct symbol lookups.
-    *   *Cache Manager:* Eliminates duplicate API requests via memory cache hits.
-*   **Implementation Location:** `server/src/providers/implementations/`, `server/src/services/evidenceService.js`.
-
-#### Layer 6: Evidence Aggregator (Normalization Layer)
-*   **Purpose:** Merges concurrent provider results, structures logs, and scores confidence.
-*   **Why it exists:** Cleans messy raw API shapes into normalized schemas.
-*   **Operations:** Resolves quote closes, counts recovered fields, lists active providers, and calculates a JS deterministic confidence score based on Quality Gate completeness reports.
-*   **Implementation Location:** [`server/src/scoring/evidenceAggregator.js`](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/scoring/evidenceAggregator.js).
-
-#### Layer 7: Evidence Quality Gate (Auditing Layer)
-*   **Purpose:** Evaluates evidence completeness before routing to scoring nodes.
-*   **Why it exists:** Identifies missing metrics and drives targeted recollections.
-*   **Operations:** Grades profiles, statements, and news (0-100%). If the completeness score is low, it triggers a cascade to recollect specific missing fields.
-*   **Implementation Location:** [`server/src/scoring/qualityGate.js`](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/scoring/qualityGate.js).
-
-#### Layer 8: Quantitative Scoring (Scorecard Layer)
-*   **Purpose:** Computes metric subscores based on financial health.
-*   **Why it exists:** Generates objective scores without AI bias.
-*   **Subscores:**
-    *   *Profitability (0-100):* Ranks operating margins and revenue growths.
-    *   *Solvency (0-100):* Ranks current ratios and debt-to-equity levels.
-    *   *Momentum (0-100):* Evaluates price trends (Bullish/Sideways/Bearish).
-*   **Implementation Location:** `server/src/agent/nodes/computeScores.js`.
-
-#### Layer 9: Deterministic Valuation Engine (Valuation Layer)
-*   **Purpose:** Computes intrinsic stock valuations and margins of safety.
-*   **Why it exists:** Provides mathematically defensible fair values.
-*   **Models:**
-    *   *DCF Model:* Projects FCF, calculates Cost of Equity ($K_e$) using CAPM and levered Beta, and discounts cash flows.
-    *   *Relative Comps Multiple:* Computes fair value relative to sector PE/PB multiples.
-    *   *Consensus Blender:* Blends DCF (60%) and Comps (40%) to resolve consensus targets.
-*   **Implementation Location:** [`server/src/scoring/valuationCalculator.js`](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/scoring/valuationCalculator.js), [`server/src/config/valuationConfig.js`](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/config/valuationConfig.js).
-
-#### Layer 10: Recommendation Engine (Decision Layer)
-*   **Purpose:** Programmatically determines the investment rating based on price gaps.
-*   **Why it exists:** **Crucial Design Choice:** The Buy/Hold/Sell rating is determined programmatically in JavaScript based on intrinsic consensus targets and current trading prices. The LLM does NOT make the investment decision; it is restricted to explaining it.
-*   **Implementation Location:** [`server/src/scoring/valuationCalculator.js`](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/scoring/valuationCalculator.js).
-
-#### Layer 11: LLM (Synthesis Layer)
-*   **Purpose:** Synthesizes news, risk factors, and ratings into an explainable report.
-*   **Why it exists:** Provides qualitative context to explain the quantitative targets.
-*   **Operations:** Receives the resolved state metrics, explains the thesis, formats risks, and outputs structured JSON.
-*   **Implementation Location:** [`server/src/agent/nodes/generateRecommendation.js`](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/agent/nodes/generateRecommendation.js), `server/src/providers/llmRouter.js`.
-
-#### Layer 12: Final JSON (Output Layer)
-*   **Purpose:** Standard structured output returned to the web dashboard.
-*   **Format:**
-```json
-{
-  "success": true,
-  "data": {
-    "resolvedIdentity": { "ticker": "AAPL", "name": "Apple Inc." },
-    "profile": { "sector": "Technology", "description": "..." },
-    "financials": { "annualIncomeStatement": [ ... ] },
-    "scores": { "overallScore": 55, "profitabilityScore": 70 },
-    "valuation": { "consensusValue": 75.72, "upsidePercent": 0, "marginOfSafety": 0 },
-    "recommendation": { "rating": "Sell", "investmentThesis": "...", "risks": [ ... ] }
-  }
-}
-```
-
----
-
-### 3. Folder Architecture
-
-The repository is structured as a decoupled backend server and frontend dashboard package:
-
-```text
-MarketPilotAI/
-├── docs/                      # Technical specification phases and documentations
-├── client/                    # React (Vite) frontend application source code
-└── server/                    # Node.js backend workspace
-    ├── index.js               # Express API server entry point
-    ├── src/
-    │   ├── agent/             # LangGraph state machine orchestrator core
-    │   │   ├── graph.js       # StateGraph node linkages and routing edges
-    │   │   ├── state.js       # AgentState properties and channel schema
-    │   │   └── nodes/         # Single-responsibility graph execution nodes
-    │   ├── config/            # Environment and financial policy setups
-    │   │   ├── env.js         # API keys validations and defaults
-    │   │   ├── valuationConfig.js  # Valuation horizons, CAPM Rf/MRP and sector PE targets
-    │   │   └── errorHandler.js # Centralized route error and rate-limit handler
-    │   ├── providers/         # Concrete API integration connectors
-    │   │   ├── cache/         # Memory caching layer with TTL pruning
-    │   │   ├── interfaces/    # Structured provider abstract base contracts
-    │   │   └── implementations/ # Yahoo, Tavily, and CompanyResolver handlers
-    │   ├── scoring/           # Calculations and diagnostic scorers
-    │   │   ├── evidenceAggregator.js # Normalization and confidence scoring
-    │   │   ├── qualityGate.js  # Diagnostic quality gates scorecards
-    │   │   └── valuationCalculator.js # DCF, multiples comps, and levered Beta math
-    │   └── services/          # Abstracted providers orchestration service layer
-    └── tests/                 # Isolated testing suites
-```
-
----
-
-### 4. End-to-End Execution Flow
-
-```text
-   User searches company name in search input on React Frontend
-                            ↓
-   Express API receives request (GET/POST /api/research)
-                            ↓
-   LangGraph starts execution loop initializing State channel
-                            ↓
-   validateInputNode: Verifies query characters and format
-                            ↓
-   resolveCompanyNode: Queries Resolver autocomplete to bind ticker symbol
-                            ↓
-   collectEvidenceNode: Concurrently fetches Yahoo Quote, Chart and Tavily news
-                            ↓
-   evidenceAggregator: Normalizes data shapes and logs provider coverage
-                            ↓
-   evaluateQualityNode: Audits completeness and lists missing fields
-                            ↓
-   recollectMissingNode: CASCADE LOOP (1-2 attempts) targeted to patch missing details
-                            ↓
-   computeScoresNode: Programmatically scores Profitability, Solvency, and Momentum
-                            ↓
-   valuationCalculator: Computes Levered Beta, CAPM Cost of Equity, and DCF/Comps consensus
-                            ↓
-   valuationCalculator: Computes recommendation (Buy/Hold/Sell) using policy thresholds
-                            ↓
-   generateRecommendationNode: LLM router synthesizes news and explains the recommendation
-                            ↓
-   Express REST API returns completed JSON report to frontend client
-                            ↓
-   React Dashboard visualizes scorecards, Cash Flow schedules, and thesis details
-```
-
----
-
-### 5. Responsibilities Table
-
-| Component | Primary Responsibility | Key Files |
-| :--- | :--- | :--- |
-| **LangGraph Orchestrator** | Coordinates execution node sequences, loops, and routing transitions. | `graph.js`, `state.js` |
-| **Evidence Aggregator** | Normalizes raw schemas, maps provider logs, and calculates confidence. | `evidenceAggregator.js` |
-| **Quality Gate** | Diagnoses database completeness and flags recollection requirements. | `qualityGate.js` |
-| **Scoring Engine** | Calculates deterministic Profitability, Solvency, and Momentum subscores. | `computeScores.js` |
-| **Valuation Engine** | Projects DCF, calculates Cost of Equity via CAPM, and averages relative sector multiples. | `valuationCalculator.js`, `valuationConfig.js` |
-| **Recommendation Engine** | Decides Buy/Hold/Sell ratings programmatically based on quantitative thresholds. | `valuationCalculator.js` |
-| **LLM Router** | Generates human-readable explanations, investment theses, and risk logs. | `llmRouter.js`, `generateRecommendation.js` |
-| **REST API Server** | Exposes HTTP routes and manages global errors and rate limits. | `index.js`, `errorHandler.js` |
-| **Frontend UI** | Visualizes financial scores, projections, and ratings. | Root `client/` folder |
-
----
-
-### 6. Important Design Principles
-
-1.  **Deterministic Before AI:** Ratios, scoring matrices, intrinsic target prices, and investment ratings are calculated programmatically. The AI never determines ratings or invents financial numbers.
-2.  **AI Explains, It Does Not Decide:** The LLM acts strictly as a qualitative synthesizer. It interprets calculated metrics and news, translating them into a readable investment thesis.
-3.  **Modular Provider Abstraction:** Integrations are decoupled from node definitions. This allows new providers to be registered without refactoring graph workflows.
-4.  **Field-Level Fault Tolerance:** If an API query fails, the system does not crash. It logs the warnings, evaluates completeness, and recollects missing data via secondary search cascades.
-5.  **Configurable Financial Assumptions:** Macro variables (CAPM rates, multiples weights, forecast horizon) are centralized in configuration files, making it easy to adapt to changing market conditions.
-6.  **Observability & Transparency:** Every calculation leaves a detailed log trail. Intermediate metrics (cash flows, terminal values, present values) are exposed in the JSON response, making the engine easy to debug and verify.
-7.  **Future Extensibility:** The architecture is designed to accommodate additional structured API providers, portfolio management features, and alternative valuation models.
-

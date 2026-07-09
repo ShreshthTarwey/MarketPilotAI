@@ -9,52 +9,6 @@ import LlmPromptTraceTab from './components/LlmPromptTraceTab';
 import Sidebar from './components/Sidebar';
 import LandingPage from './components/LandingPage';
 
-function getSupportingFactorsList(report) {
-  const rating = report.recommendation.rating?.toLowerCase() || 'hold';
-  const factors = [];
-  
-  if (rating === 'buy') {
-    if (report.valuation.marginOfSafety > 10) {
-      factors.push(`Strong Intrinsic Margin of Safety: +${report.valuation.marginOfSafety.toFixed(1)}%`);
-    }
-    if (report.scores.profitabilityScore >= 75) {
-      factors.push("Superior profitability margins & ROE ratios");
-    }
-    if (report.scores.solvencyScore >= 60) {
-      factors.push("Healthy balance sheet & debt solvency coverage");
-    }
-    if (factors.length < 3) {
-      factors.push("Undervalued entry points relative to sector benchmarks");
-    }
-  } else if (rating === 'sell') {
-    if (report.valuation.marginOfSafety < -10) {
-      factors.push(`Significant Premium Over Fair Value`);
-    }
-    if (report.scores.solvencyScore < 40) {
-      factors.push("Distressed solvency/liquidity ratio coverage");
-    }
-    if (report.scores.profitabilityScore < 50) {
-      factors.push("Eroding operating margins & return metrics");
-    }
-    if (factors.length < 3) {
-      factors.push("Unfavorable qualitative news catalysts & momentum");
-    }
-  } else {
-    factors.push("Neutral trading range relative to calculated fair value");
-    if (report.scores.ratios.debtToEquity > 2) {
-      factors.push("Elevated debt leverage acts as neutralizer");
-    }
-    if (report.scores.ratios.operatingMargin > 15) {
-      factors.push("Strong operating cash flow offsets high multiples");
-    }
-    if (factors.length < 3) {
-      factors.push("Balanced profitability and trend factors");
-      factors.push("Neutral qualitative news catalyst score");
-    }
-  }
-  return factors.slice(0, 4);
-}
-
 export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
