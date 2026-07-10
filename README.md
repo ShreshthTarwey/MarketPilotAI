@@ -2,6 +2,10 @@
 
 MarketPilot AI is a production-oriented AI Investment Research Agent designed to autonomously research global equities (US, Indian, and Global), compute deterministic health/growth metrics, validate evidence quality, and generate human-in-the-loop explainable investment recommendations ("Buy", "Hold", or "Sell").
 
+**Live Deployments:**
+*   **Frontend Client (Vercel):** **[market-pilot-ai-ten.vercel.app](https://market-pilot-ai-ten.vercel.app)**
+*   **Backend REST API (Render):** **[marketpilotai.onrender.com](https://marketpilotai.onrender.com)**
+
 ---
 
 ## Technical Stack
@@ -39,21 +43,44 @@ MarketPilot AI is a production-oriented AI Investment Research Agent designed to
 
 ---
 
-## Development Progress (Current Status: Complete)
-We have successfully completed all engineering phases:
-*   [x] **Institutional UI/UX Refinement & Transparency (Phase 8):** Overhauled the dashboard executive summary layout with structured company snapshot metadata, key financial ratios tables, score breakdowns, confidence checklists, target pricing gap absolute differentials, news sentiment distributions, and dynamic decision drivers.
-*   [x] **Testing, Polish & Verification (Phase 7):** Verified E2E engine outputs against real stock tickers (e.g. `TCS.NS`, `MRF.NS`, `LCID`, `PWL.NS`), confirmed WACC/CAPM/DCF math consistency, validated custom risk warning overrides, and resolved state-sync completeness warnings.
-*   [x] **Foundation Layer (Phase 1):** Completed environment validation, graph state annotations, and provider interface abstractions.
-*   [x] **Cache Layer (Module 1):** Implemented an in-memory TTL caching engine ([memoryCache.js](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/providers/cache/memoryCache.js)) with automated key pruning.
-*   [x] **Company Resolution Provider (Module 2):** Developed [companyResolver.js](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/providers/implementations/companyResolver.js) supporting deterministic lookup and verified LLM autocorrection.
-*   [x] **Financial Provider (Module 3):** Implemented [yahooFinance.js](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/providers/implementations/yahooFinance.js) using `yahoo-finance2` and added `fundamentalsTimeSeries` support.
-*   [x] **News & Search Providers (Modules 4-5):** Developed [tavilySearch.js](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/providers/implementations/tavilySearch.js) wrapping the Tavily Search API.
-*   [x] **Evidence Provider Router (Module 6):** Developed [providerRouter.js](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/providers/providerRouter.js) to manage field-level fallback recovery.
-*   [x] **Valuation Engine (Phase 4):** Centralized valuationConfig.js configurations and built valuationCalculator.js calculating levered beta, CAPM cost of equity, smoothed revenue growths, and DCF cash flow schedules.
-*   [x] **REST API Server (Phase 5):** Exposed Express routes (`/api/resolve` and `/api/research`) running LangGraph invocation loops, rate limit buffers, and rate-limit interceptors.
-*   [x] **React Frontend Dashboard (Phase 6):** Built a premium monochrome dashboard utilizing Vercel-inspired dark theme styles, autocomplete resolve dropdowns, custom terminal loading streams, circular SVG scorecard dials, and 5-Year Cash Flow projection tables.
-*   [x] **Corporate SSL Proxy Bypass & Fallbacks:** Injected NODE_TLS_REJECT_UNAUTHORIZED bypass and price recovery fallbacks to handle Sophos firewalls and newly listed stocks keylessly.
-*   [x] **Testing Infrastructure:** Created isolated scripts inside `server/tests/` to verify concrete providers, router loops, and API responses.
+## How to run it — setup and run steps (plus any keys / env needed)
+
+Follow these steps to configure your credentials and run the application locally on Windows or macOS:
+
+### 1. Configure Environment Variables
+*   **Backend Credentials:** Create a `.env` file in the root directory and add your API keys:
+    ```env
+    PORT=5000
+    GEMINI_API_KEY=your_gemini_key
+    TAVILY_API_KEY=your_tavily_key
+    GROQ_API_KEY_1=your_groq_key_1
+    ```
+*   **Frontend Endpoints:** Create a `.env` file in the `client/` directory to target your backend (defaults to local host if omitted):
+    ```env
+    VITE_API_URL=http://localhost:5000
+    ```
+
+### 2. Setup & Start the Backend API Server
+*   Navigate to the server directory and install required dependencies:
+    ```bash
+    cd server
+    npm install
+    ```
+*   Run the development server in watch mode (listens on port `5000`):
+    ```bash
+    npm run dev
+    ```
+
+### 3. Setup & Start the Frontend Client
+*   Navigate to the client directory and install required package dependencies:
+    ```bash
+    cd client
+    npm install
+    ```
+*   Run the Vite frontend bundler server (defaults to `http://localhost:5173`):
+    ```bash
+    npm run dev
+    ```
 
 ---
 
