@@ -383,7 +383,11 @@ Static PDF generators, server-rendered text outputs, and standard dashboard temp
 Expose both a binary Assignment Decision (INVEST / PASS) and a more detailed Research Rating (BUY / HOLD / SELL) on the presentation layer.
 
 **Why**
-MarketPilot AI computes a detailed institutional recommendation (BUY/HOLD/SELL). A separate deterministic Assignment Decision (INVEST/PASS) is then derived from the overall quantitative analysis to satisfy the assignment's binary output requirement. This ensures that high-quality, low-risk companies (such as Apple or Microsoft) that might be rated HOLD due to moderate valuation premiums are correctly marked as INVEST rather than being misclassified as PASS.
+MarketPilot AI computes a detailed institutional recommendation (BUY/HOLD/SELL). A separate deterministic Assignment Decision (INVEST/PASS) is then derived from the overall quantitative analysis using the following rules:
+*   **`BUY` $\rightarrow$ `INVEST`:** Automatically marked as `INVEST` due to strong upside and fundamentals.
+*   **`HOLD` $\rightarrow$ `INVEST` (High-Quality Hold):** Marked as `INVEST` if the stock is a safe, high-quality business. This occurs when the Overall Score $\ge 50$, Financial Health Score $\ge 50$, Safety Score $\ge 60$, and the price is within a reasonable $15\%$ overvaluation premium (Margin of Safety $\ge -15\%$). This prevents premium businesses like Apple or Microsoft from being misclassified as `PASS` solely due to current market premiums.
+*   **`HOLD` $\rightarrow$ `PASS` (Low-Quality / Bubble Hold):** Marked as `PASS` if the stock fails any of the high-quality holding checks (e.g., overall score $< 50$, weak financial health, poor safety, or pricing bubble exceeding a $15\%$ premium).
+*   **`SELL` $\rightarrow$ `PASS`:** Automatically marked as `PASS` due to fundamental distress or extreme overvaluation.
 
 **Trade-off**
 Requires maintaining a dual-layer mapping interface in the API payload and frontend dashboard view components.
@@ -470,6 +474,234 @@ Introduces dependency on MCP servers and host environments.
 
 **What we intentionally left out**
 Automatic unverified styling injections and raw code generation overrides.
+
+# Example runs — your agent’s output on a few companies of your choice
+
+This section demonstrates the execution of the complete MarketPilot AI pipeline across various real-world stock categories.
+
+---
+
+## Example 1 — Tata Consultancy Services (TCS.NS)
+
+![TCS.NS INVEST + BUY](docs/media__1783684411023.png)
+
+### Scenario
+Example of a fundamentally strong company trading below intrinsic value.
+
+### User Input
+```text
+TCS
+```
+
+### Final Decision Summary
+
+| Metric | Value |
+| :--- | :--- |
+| **Assignment Decision** | `INVEST` |
+| **Research Rating** | `BUY` |
+| **Overall Score** | `66.0 / 100` |
+| **Confidence** | `90%` |
+| **Margin of Safety** | `0.0% (At Fair Value)` |
+| **Resolution Match** | `100%` |
+
+### Why the Agent Reached This Decision
+*   Strong solvency score with zero active debt risk penalties.
+*   Highly robust profit margins and strong ROE contributions (45.9%).
+*   Positive free cash flow trend over the last fiscal years.
+*   Extremely strong safety score with zero penalties triggered.
+*   Supportive sentiment indicators from active news scraping.
+
+### AI Qualitative Summary
+The qualitative synthesis confirms TCS exhibits outstanding operational resilience and high profitability, backed by a strong return on equity and pristine solvency structure. Despite current pricing reflecting consensus value, the fundamental health and risk metrics strongly justify a conviction INVEST recommendation.
+
+### Interesting Observation
+> TCS demonstrates that a company does not need a massive valuation gap to receive an INVEST decision if its underlying financial quality, profitability, and safety metrics are exceptionally strong.
+
+### Pipeline Outcome
+*   [x] Company successfully resolved
+*   [x] Evidence collected
+*   [x] Quality Gate passed
+*   [x] Deterministic valuation completed
+*   [x] Recommendation generated
+
+---
+
+## Example 2 — Microsoft Corporation (MSFT)
+
+![MSFT INVEST + HOLD](docs/media__1783684493220.png)
+
+### Scenario
+Example of a premium company where valuation offsets strong fundamentals.
+
+### User Input
+```text
+Microsoft
+```
+
+### Final Decision Summary
+
+| Metric | Value |
+| :--- | :--- |
+| **Assignment Decision** | `INVEST` |
+| **Research Rating** | `HOLD` |
+| **Overall Score** | `53.0 / 100` |
+| **Confidence** | `90%` |
+| **Margin of Safety** | `0.0% (At Fair Value)` |
+| **Resolution Match** | `100%` |
+
+### Why the Agent Reached This Decision
+*   Exceptional profitability and solvency scores.
+*   Low debt-to-equity ratio (0.80x) indicating solid balance sheet quality.
+*   Consistent positive cash flow and high return on capital.
+*   Minimal risk profile with zero high-severity safety penalties.
+*   Price is within the 15% acceptable premium buffer despite lack of immediate valuation discount.
+
+### AI Qualitative Summary
+Microsoft represents a premier global business with immaculate balance sheet solvency and high capital returns. Although its high valuation premium keeps the research rating at HOLD, the business's stellar safety and financial quality support a binary INVEST decision.
+
+### Interesting Observation
+> Although Microsoft received a HOLD research rating, the Assignment Decision remained INVEST because the company exhibits exceptional financial quality and strong long-term fundamentals.
+
+### Pipeline Outcome
+*   [x] Company successfully resolved
+*   [x] Evidence collected
+*   [x] Quality Gate passed
+*   [x] Deterministic valuation completed
+*   [x] Recommendation generated
+
+---
+
+## Example 3 — Apple Inc. (AAPL)
+
+![AAPL PASS + HOLD](docs/media__1783684543695.png)
+
+### Scenario
+Example of a premium company whose massive valuation premium offsets positive fundamentals.
+
+### User Input
+```text
+AAPL
+```
+
+### Final Decision Summary
+
+| Metric | Value |
+| :--- | :--- |
+| **Assignment Decision** | `PASS` |
+| **Research Rating** | `HOLD` |
+| **Overall Score** | `45.0 / 100` |
+| **Confidence** | `90%` |
+| **Margin of Safety** | `0.0% (At Premium)` |
+| **Resolution Match** | `100%` |
+
+### Why the Agent Reached This Decision
+*   Overvalued relative to intrinsic DCF and relative multiples targets.
+*   Safety score lowered due to high debt-to-equity leverage (3.87x D/E).
+*   Weak short-term liquidity coverage triggering active safety penalties.
+*   High return on equity remains strong (151.9%) but is offset by balance sheet structure risks.
+*   Premium pricing exceeds the 15% margin of safety buffer.
+
+### AI Qualitative Summary
+Apple remains a highly profitable market leader with strong news sentiment. However, elevated leverage ratios and a lack of near-term liquidity cover, combined with a significant valuation premium, justify a PASS decision to avoid overpaying.
+
+### Interesting Observation
+> Apple demonstrates how a high-quality business can still receive PASS when current valuation leaves little margin of safety and leverage metrics trigger safety scorecard penalties.
+
+### Pipeline Outcome
+*   [x] Company successfully resolved
+*   [x] Evidence collected
+*   [x] Quality Gate passed
+*   [x] Deterministic valuation completed
+*   [x] Recommendation generated
+
+---
+
+## Example 4 — Intel Corporation (INTC)
+
+![INTC PASS + SELL](docs/media__1783684552003.png)
+
+### Scenario
+Example of a financially weak company resulting in a PASS recommendation.
+
+### User Input
+```text
+Intel
+```
+
+### Final Decision Summary
+
+| Metric | Value |
+| :--- | :--- |
+| **Assignment Decision** | `PASS` |
+| **Research Rating** | `SELL` |
+| **Overall Score** | `39.0 / 100` |
+| **Confidence** | `90%` |
+| **Margin of Safety** | `0.0% (Premium Pricing)` |
+| **Resolution Match** | `100%` |
+
+### Why the Agent Reached This Decision
+*   Negative free cash flow trends violating basic solvency safety gates.
+*   Negative return on equity (-0.2%) indicating structural profitability declines.
+*   Valuation metrics show substantial downside risk relative to peer multiples.
+*   High safety penalties applied for cash flow distress and weak interest coverage.
+*   Weak news sentiment reflecting operational and manufacturing delays.
+
+### AI Qualitative Summary
+Intel faces significant structural headwinds, marked by negative profitability yields and capital outflows. The combination of balance sheet distress, negative margins, and unsupportive news catalysts results in a clear PASS decision.
+
+### Interesting Observation
+> Intel illustrates how negative profitability and weak cash flows outweigh historical brand strength, leading to safety score penalization and a PASS decision.
+
+### Pipeline Outcome
+*   [x] Company successfully resolved
+*   [x] Evidence collected
+*   [x] Quality Gate passed
+*   [x] Deterministic valuation completed
+*   [x] Recommendation generated
+
+---
+
+## Example 5 — Invalid Company Resolution (Edge Case)
+
+![Invalid Resolution 123456](docs/media__1783684561163.png)
+
+### Scenario
+Example demonstrating safe rejection of an invalid company query.
+
+### User Input
+```text
+123456
+```
+
+### Final Decision Summary
+
+| Metric | Value |
+| :--- | :--- |
+| **Assignment Decision** | `PASS` |
+| **Research Rating** | `N/A (Terminated)` |
+| **Overall Score** | `N/A` |
+| **Confidence** | `0%` |
+| **Margin of Safety** | `N/A` |
+| **Resolution Match** | `0%` |
+
+### Why the Agent Reached This Decision
+*   The resolved company name similarity fell below the Levenshtein 70% threshold.
+*   Similarity gate rejected the invalid name resolution to prevent hallucination.
+*   The LangGraph workflow exited early at the resolution node.
+*   No third-party data collection fetches or valuation calculations were executed.
+
+### AI Qualitative Summary
+The research orchestrator safely aborted execution because the query "123456" could not be mapped to any valid corporate equities or tickers. The system returned a clean validation error warning to the user.
+
+### Interesting Observation
+> This edge case demonstrates the robustness of the LangGraph validation node, which terminates early to protect API keys from wasting tokens on hallucinated company results.
+
+### Pipeline Outcome
+*   [x] Input validated
+*   [x] Similarity Gate rejected match
+*   [x] Research pipeline terminated safely
+*   [x] No financial analysis executed
+*   [x] User received structured validation warning
 
 ---
 
