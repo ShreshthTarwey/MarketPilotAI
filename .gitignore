@@ -58,6 +58,7 @@ public/
 .env.production.local
 *.env
 *.env.*
+!*.env.example
 
 # Python virtual environments (if any)
 .venv/
