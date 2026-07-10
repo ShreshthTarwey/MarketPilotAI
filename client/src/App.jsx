@@ -54,6 +54,26 @@ export default function App() {
     return () => clearTimeout(delayDebounceFn);
   }, [searchQuery]);
 
+  // Backend Keep-Alive & Warmup Ping (Render Cold-Start Protection)
+  useEffect(() => {
+    const wakeBackend = async () => {
+      try {
+        console.log('Sending warmup ping to backend...');
+        await fetch(`${API_BASE_URL}/health`);
+      } catch (err) {
+        console.warn('Backend warmup ping failed:', err);
+      }
+    };
+    
+    // Immediate wakeup ping
+    wakeBackend();
+
+    // Periodic keep-alive ping every 5 minutes
+    const keepAliveInterval = setInterval(wakeBackend, 5 * 60 * 1000);
+
+    return () => clearInterval(keepAliveInterval);
+  }, []);
+
   // Auto-dismiss execution error toast after 5 seconds
   useEffect(() => {
     if (!errorMsg) return;
