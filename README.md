@@ -483,7 +483,7 @@ This section demonstrates the execution of the complete MarketPilot AI pipeline 
 
 ## Example 1 — Tata Consultancy Services (TCS.NS)
 
-<img src="docs/media__1783694399474.jpg" width="100%" alt="TCS.NS INVEST + BUY" />
+<img src="docs/TCS.png" width="100%" alt="TCS.NS INVEST + BUY" />
 
 ### Scenario
 Example of a fundamentally strong company trading below intrinsic value.
@@ -528,7 +528,7 @@ The qualitative synthesis confirms TCS exhibits outstanding operational resilien
 
 ## Example 2 — Microsoft Corporation (MSFT)
 
-<img src="docs/media__1783694402407.jpg" width="100%" alt="MSFT INVEST + HOLD" />
+<img src="docs/MSFT.png" width="100%" alt="MSFT INVEST + HOLD" />
 
 ### Scenario
 Example of a premium company where valuation offsets strong fundamentals.
@@ -573,7 +573,7 @@ Microsoft represents a premier global business with immaculate balance sheet sol
 
 ## Example 3 — Apple Inc. (AAPL)
 
-<img src="docs/media__1783694404798.jpg" width="100%" alt="AAPL PASS + HOLD" />
+<img src="docs/AAPL.png" width="100%" alt="AAPL PASS + HOLD" />
 
 ### Scenario
 Example of a premium company whose massive valuation premium offsets positive fundamentals.
@@ -618,7 +618,7 @@ Apple remains a highly profitable market leader with strong news sentiment. Howe
 
 ## Example 4 — Intel Corporation (INTC)
 
-<img src="docs/media__1783694407492.jpg" width="100%" alt="INTC PASS + SELL" />
+<img src="docs/INTC.png" width="100%" alt="INTC PASS + SELL" />
 
 ### Scenario
 Example of a financially weak company resulting in a PASS recommendation.
@@ -663,7 +663,7 @@ Intel faces significant structural headwinds, marked by negative profitability y
 
 ## Example 5 — Invalid Company Resolution (Edge Case)
 
-<img src="docs/media__1783694412777.jpg" width="100%" alt="Invalid Resolution 123456" />
+<img src="docs/ERROR.png" width="100%" alt="Invalid Resolution 123456" />
 
 ### Scenario
 Example demonstrating safe rejection of an invalid company query.
