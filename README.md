@@ -167,38 +167,309 @@ flowchart TD
 
 ---
 
-## Key Decisions & Trade-offs
+## Key decisions & trade-offs — what you chose and why, and what you left out
 
-### Decoupled Resilient LLM Routing
-Rather than hardcoding a single API key or coupling the graph to a single LLM sdk endpoint, we created a specialized LLM Service Router ([llmRouter.js](file:///c:/Users/Asus/Desktop/MarketPilotAI/server/src/providers/llmRouter.js)) wrapping our calls.
-*   **Provider Pooling:** Distributes queries between Groq (Llama-3.3-70b-versatile) and Gemini (Gemini-1.5-flash).
-*   **Per-Request Key Rotation:** Shuffles a cloned array of Groq keys (`GROQ_API_KEY_1`, `GROQ_API_KEY_2`, etc.) on *every incoming request* to guarantee balanced load distribution.
-*   **Smart Retry Strategy:** Evaluates errors and retries *only* retryable exceptions (HTTP 429 rate limits, HTTP 503 drops, connection drops, and network timeouts). For authentication errors (HTTP 401/403) or malformed payload errors (HTTP 400), it fails immediately to prevent unnecessary API overhead.
-*   **Provider Failover & Graceful Degradation:** Falls back to Gemini if all Groq pool keys are exhausted. If Gemini fails too, it wraps exceptions in a standard structured JSON error, preventing server crashes.
-*   **Provider Metadata Audit:** Returns execution logs (provider name, model, request latency, key identifier, success flag) wrapped alongside payload content (`text` or `data`), supporting state traces.
-*   **Separation of Concerns:** LangGraph nodes remain completely generic, communicating only through the abstract `generateJSON()` call.
+### 1. LangGraph instead of LangChain Agents
 
-### Field-Level Recovery vs. Provider Failover
-Rather than dropping an entire dataset and triggering a full fallback fetch when a single metric is missing, our router utilizes **Field-Level Recovery**.
-*   **Targeted Resolution:** The router evaluates which specific metrics (e.g. `operatingIncome`) are missing or null.
-*   **Patching Cascade:** It targets *only* the missing keys by checking:
-    $$\text{Primary (QuoteSummary)} \longrightarrow \text{Secondary (fundamentalsTimeSeries)} \longrightarrow \text{Tertiary (SEC EDGAR)} \longrightarrow \text{Search (Tavily Scrape)} \longrightarrow \text{LLM Extraction}$$
-*   **Integrity:** Preserves the core numbers provided by high-SLA primary sources, avoiding discrepancies caused by merging full sheets from conflicting APIs.
+**Decision**
+Used LangGraph to construct a stateful directed acyclic graph (DAG) with explicit nodes and conditional edges.
 
-### Category-Wise Quality Gate Validation
-We discard generic boolean checks for a multi-category scorecard logic.
-*   **Diagnostic Nodes:** The gate evaluates **Profile, Income Statement, Balance Sheet, Cash Flow, and News** independently.
-*   **Recollection Loops:** If any category drops below its configured completeness threshold (e.g. 80%), only the missing fields in that category are routed to fallback collection.
-*   **Immutability:** Previously verified data is locked in state to prevent infinite loops and limit API token usage.
+**Why**
+Delivers deterministic execution patterns, a visual flow structure, explicit graph state preservation across tasks, and reproducible routing logic, making testing and debugging significantly easier.
 
-### In-Flight Promise Caching (Cache Stampede Protection)
-When collecting profile and financials in parallel, they trigger concurrently. To prevent duplicate HTTP requests to Yahoo Finance QuoteSummary, the provider layer caches the active **Promise** in a registry. The concurrent call awaits and reuses the same request promise.
+**Trade-off**
+Requires more manual graph boilerplate and configuration compared to quick autonomous agent loops.
 
-### Evidence Aggregator Layer
-An intermediate layer that normalizes multi-provider shapes, removes duplicates, consolidates metadata into `providerCoverage`, and calculates a **deterministic confidence score** entirely in JavaScript before passing it to the reasoning node.
+**What we intentionally left out**
+Autonomous planning agents, recursive self-reflection cycles, and open-ended autonomous agent loops.
 
-### Deterministic Confidence Scoring
-Calculated in JavaScript (not the LLM) based on evidence completeness, fallback levels triggered, missing critical variables, and provider weights.
+---
+
+### 2. React + Vite instead of Next.js
+
+**Decision**
+Built the frontend dashboard as a client-side Single Page Application (SPA) using React powered by Vite.
+
+**Why**
+The dashboard has zero SEO requirements, builds extremely quickly, simplifies bundle sizes, and runs on simple static web hosts without any server infrastructure.
+
+**Trade-off**
+Lacks Server-Side Rendering (SSR), Incremental Static Regeneration (ISR), and native React Server Components.
+
+**What we intentionally left out**
+SSR, ISR, SEO optimization, and file-based routing.
+
+---
+
+### 3. Node.js + Express instead of Python/FastAPI
+
+**Decision**
+Selected Node.js with Express as the backend REST API gateway.
+
+**Why**
+Keeps the entire repository within a unified JavaScript ecosystem, facilitating shared utility libraries, reducing developer context switching, and leveraging the LangGraph.js ecosystem directly.
+
+**Trade-off**
+Lacks native Python numerical libraries (pandas, numpy) and FastAPI auto-documentation out of the box.
+
+**What we intentionally left out**
+Python microservices, FastAPI routers, and multithreading task systems.
+
+---
+
+### 4. No Database
+
+**Decision**
+Excluded any SQL or NoSQL database storage layers.
+
+**Why**
+The application executes real-time investment audits. Every user request queries active market feeds rather than reading stale history. There is no requirement for user accounts, watchlists, or data persistence.
+
+**Trade-off**
+Users cannot save research logs, store stock watchlists, or recall historical reports.
+
+**What we intentionally left out**
+PostgreSQL, MongoDB, Firebase database storage integrations, user profiles, and session storage.
+
+---
+
+### 5. In-Memory Cache instead of Redis
+
+**Decision**
+Implemented an in-memory process RAM singleton cache map with automated TTL expiry limits.
+
+**Why**
+Drastically minimizes infrastructure complexity, runs keylessly with zero operational dependencies, and satisfies the assignment caching requirements with sub-millisecond retrieve speeds.
+
+**Trade-off**
+Cache states are wiped out completely on server restarts and cannot be shared across multiple instances (unsuitable for horizontal scaling).
+
+**What we intentionally left out**
+Redis, distributed caching, cache replication, and persistent cache storage.
+
+---
+
+### 6. Multi-Provider Data Architecture
+
+**Decision**
+Structured the collection router to query Yahoo Finance, then fall back to SEC EDGAR, Tavily Search, and LLM Extraction in sequence.
+
+**Why**
+Maximizes data coverage resilience and protects the pipeline from individual endpoint failures or rate-limiting bans.
+
+**Trade-off**
+Significantly increases implementation complexity and requires normalizing mismatched raw data schemas.
+
+**What we intentionally left out**
+Paid institutional terminals (Bloomberg, Refinitiv) and custom third-party scrapers.
+
+---
+
+### 7. Deterministic Calculations instead of LLM Math
+
+**Decision**
+Performed all DCF, multiples comp models, CAPM, safety ratios, and rating scoring programmatically in JavaScript.
+
+**Why**
+Guarantees absolute mathematical precision and eliminates LLM hallucinations or calculation drift. The LLM is restricted to qualitative interpretation.
+
+**Trade-off**
+Limits model adjustments to pre-coded mathematical boundaries.
+
+**What we intentionally left out**
+LLM-driven calculation agents, prompt-based formula solving, and python code execution sandboxes.
+
+---
+
+### 8. Multi-Factor Recommendation Engine
+
+**Decision**
+Designed a scoring system that weights Valuation (30%), Financial Health (30%), Safety/Risks (15%), Momentum (15%), and News (10%).
+
+**Why**
+Avoids myopic ratings based solely on DCF upside by factoring in balance sheet solvency leverage, news sentiment catalyst modifiers, and price trends.
+
+**Trade-off**
+Requires weight tuning and normalization when valuation data is partially missing.
+
+**What we intentionally left out**
+Simple single-factor buy rules and black-box machine learning classification models.
+
+---
+
+### 9. Strict Company Resolution Similarity Gate
+
+**Decision**
+Implemented a similarity validation gate using Levenshtein distance and acronym checks, enforcing a minimum 70% threshold.
+
+**Why**
+Prevents the orchestrator from researching the wrong company when fuzzy autocompletes return unrelated symbols.
+
+**Trade-off**
+Ambiguous or highly misspelled company queries are rejected immediately and require manual refinement.
+
+**What we intentionally left out**
+Automatic resolution matching below 70% confidence and raw unchecked search redirections.
+
+---
+
+### 10. Evidence Quality Gate
+
+**Decision**
+Built a programmatic Evidence Quality Gate node that grades profile, income statement, balance sheet, cash flow, and news data.
+
+**Why**
+Prevents corrupting valuation formulas with null values by evaluating completeness prior to scoring.
+
+**Trade-off**
+Increases pipeline execution latency when recollection loops are triggered.
+
+**What we intentionally left out**
+Generative LLM validation checks and raw data bypass routes.
+
+---
+
+### 11. Field-Level Recovery
+
+**Decision**
+Configured the provider router to scan individual properties and patch only missing keys.
+
+**Why**
+Preserves the core numbers retrieved from trusted primary sources while avoiding inconsistencies from merging duplicate filings.
+
+**Trade-off**
+Requires strict property-by-property mapping definitions in code.
+
+**What we intentionally left out**
+Overwriting full statement sheets or falling back globally when a single cell is empty.
+
+---
+
+### 12. Explainability instead of Black Box AI
+
+**Decision**
+Exposes intermediate discount rates, present value arrays, subscore weights, news sentiments, and citations.
+
+**Why**
+Enables users to fully audit the recommendation and verify the math behind the Buy/Hold/Sell rating.
+
+**Trade-off**
+Yields a larger JSON payload and higher front-end component complexity.
+
+**What we intentionally left out**
+Simple single-word recommendations and hidden calculation parameters.
+
+---
+
+### 13. Interactive Dashboard instead of Static Report
+
+**Decision**
+Designed a tabbed glassmorphic dashboard featuring interactive period selectors and SVG progress wheels.
+
+**Why**
+Empowers users to inspect cash flows, view logs, toggle themes, and filter chart timelines dynamically.
+
+**Trade-off**
+Requires detailed front-end state management and browser-specific print stylesheet configurations.
+
+**What we intentionally left out**
+Static PDF generators, server-rendered text outputs, and standard dashboard templates.
+
+---
+
+### 14. BUY / HOLD / SELL instead of BUY / PASS
+
+**Decision**
+Modeled recommendations using Buy, Hold, and Sell ratings rather than binary Buy/Pass.
+
+**Why**
+Better reflects institutional equity research standards, where Hold naturally maps to PASS when interpreting assignment requirements.
+
+**Trade-off**
+Requires finer decision boundary thresholds (overall scores mapping to three states).
+
+**What we intentionally left out**
+Binary Buy/Pass flags and custom portfolio allocations.
+
+---
+
+### 15. No Fine-Tuned Model
+
+**Decision**
+Deployed foundation models (Llama 3.3 and Gemini Flash) via key-rotated API pools.
+
+**Why**
+Eliminates the massive overhead, deployment costs, and maintenance associated with fine-tuning a custom model.
+
+**Trade-off**
+Exposes the pipeline to API provider availability and network latency.
+
+**What we intentionally left out**
+Custom LoRA training, model hosting, and offline local transformers.
+
+---
+
+### 16. Live Market Data instead of Stored Datasets
+
+**Decision**
+Connected the backend directly to real-time APIs to fetch live prices and news.
+
+**Why**
+Ensures the scorecard evaluation remains accurate and reflective of current market conditions.
+
+**Trade-off**
+Execution speed is capped by external API response latency.
+
+**What we intentionally left out**
+Static financial CSV datasets, offline databases, and delayed historical dumps.
+
+---
+
+### 17. Progressive Fallback Strategy
+
+**Decision**
+Implemented a multi-tiered fallback hierarchy (Yahoo Summary -> Yahoo TimeSeries -> SEC EDGAR -> Tavily Search -> LLM parse).
+
+**Why**
+Guarantees that the orchestrator degrades gracefully rather than throwing exceptions when APIs are rate-limited.
+
+**Trade-off**
+Increases response time when deep fallback tiers are triggered.
+
+**What we intentionally left out**
+Immediate throw exceptions and empty response returns.
+
+---
+
+### 18. Modular Component Architecture
+
+**Decision**
+Refactored the monolithic frontend App.jsx into isolated child components in `src/components/`.
+
+**Why**
+Simplifies file complexity, prevents merge conflicts, and permits isolated testing of individual dashboard tabs.
+
+**Trade-off**
+Requires structured prop drilling and state coordination hooks.
+
+**What we intentionally left out**
+Monolithic UI structures and global state management libraries (Redux, Recoil).
+
+---
+
+### 19. Why Google Stitch MCP was added
+
+**Decision**
+Integrated Google Stitch through Model Context Protocol (MCP).
+
+**Why**
+Allows for rapid UI prototyping, layout reviews, and design system variations under developer control.
+
+**Trade-off**
+Introduces dependency on MCP servers and host environments.
+
+**What we intentionally left out**
+Automatic unverified styling injections and raw code generation overrides.
 
 ---
 
