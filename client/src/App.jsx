@@ -9,6 +9,8 @@ import LlmPromptTraceTab from './components/LlmPromptTraceTab';
 import Sidebar from './components/Sidebar';
 import LandingPage from './components/LandingPage';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
@@ -34,7 +36,7 @@ export default function App() {
     if (!searchQuery.trim()) return;
     const delayDebounceFn = setTimeout(async () => {
       try {
-        const res = await fetch(`http://localhost:5000/api/resolve?company=${encodeURIComponent(searchQuery)}`);
+        const res = await fetch(`${API_BASE_URL}/api/resolve?company=${encodeURIComponent(searchQuery)}`);
         if (!res.ok) return;
         const data = await res.json();
         if (data && data.success && data.ticker) {
@@ -97,7 +99,7 @@ export default function App() {
     }, 1100);
 
     try {
-      const res = await fetch(`http://localhost:5000/api/research?company=${encodeURIComponent(companyName)}`, {
+      const res = await fetch(`${API_BASE_URL}/api/research?company=${encodeURIComponent(companyName)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ company: companyName })

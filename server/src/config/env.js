@@ -7,7 +7,8 @@
 const dotenv = require('dotenv');
 const path = require('path');
 
-// Load environment variables from .env file
+// Load environment variables from .env file (try both relative root and current working directory)
+dotenv.config(); 
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 // Disable TLS validation check to prevent fetch failures behind corporate proxy/firewalls
