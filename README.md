@@ -483,7 +483,7 @@ This section demonstrates the execution of the complete MarketPilot AI pipeline 
 
 ## Example 1 — Tata Consultancy Services (TCS.NS)
 
-![TCS.NS INVEST + BUY](docs/media__1783684411023.png)
+![TCS.NS INVEST + BUY](docs/media__1783694399474.jpg)
 
 ### Scenario
 Example of a fundamentally strong company trading below intrinsic value.
@@ -528,7 +528,7 @@ The qualitative synthesis confirms TCS exhibits outstanding operational resilien
 
 ## Example 2 — Microsoft Corporation (MSFT)
 
-![MSFT INVEST + HOLD](docs/media__1783684493220.png)
+![MSFT INVEST + HOLD](docs/media__1783694402407.jpg)
 
 ### Scenario
 Example of a premium company where valuation offsets strong fundamentals.
@@ -573,7 +573,7 @@ Microsoft represents a premier global business with immaculate balance sheet sol
 
 ## Example 3 — Apple Inc. (AAPL)
 
-![AAPL PASS + HOLD](docs/media__1783684543695.png)
+![AAPL PASS + HOLD](docs/media__1783694404798.jpg)
 
 ### Scenario
 Example of a premium company whose massive valuation premium offsets positive fundamentals.
@@ -618,7 +618,7 @@ Apple remains a highly profitable market leader with strong news sentiment. Howe
 
 ## Example 4 — Intel Corporation (INTC)
 
-![INTC PASS + SELL](docs/media__1783684552003.png)
+![INTC PASS + SELL](docs/media__1783694407492.jpg)
 
 ### Scenario
 Example of a financially weak company resulting in a PASS recommendation.
@@ -663,7 +663,7 @@ Intel faces significant structural headwinds, marked by negative profitability y
 
 ## Example 5 — Invalid Company Resolution (Edge Case)
 
-![Invalid Resolution 123456](docs/media__1783684561163.png)
+![Invalid Resolution 123456](docs/media__1783694412777.jpg)
 
 ### Scenario
 Example demonstrating safe rejection of an invalid company query.
