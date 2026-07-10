@@ -10,6 +10,39 @@ const { calculateConfidence, getConfidenceExplanation } = require('../../scoring
 const llm = new LLMRouter();
 
 /**
+ * Deterministically calculates the binary assignment decision (INVEST / PASS).
+ * A company is labeled INVEST if:
+ * 1. The institutional rating is BUY, OR
+ * 2. The rating is HOLD, but it represents a high-quality business:
+ *    - Overall scorecard score >= 50
+ *    - Financial health score >= 50
+ *    - Safety / Risk mitigation score >= 60
+ *    - Valuation margin of safety >= -15% (meaning it is not massively overvalued)
+ * Otherwise, it is labeled PASS.
+ */
+function determineAssignmentDecision(scores, valuation) {
+  const breakdown = scores.breakdown || {};
+  const ratingUpper = (breakdown.rating || 'HOLD').toUpperCase();
+  
+  if (ratingUpper === 'BUY') {
+    return 'INVEST';
+  }
+  
+  if (ratingUpper === 'HOLD') {
+    const overallScore = breakdown.overallScore || 0;
+    const financialsScore = breakdown.financialsScore || 0;
+    const safetyScore = breakdown.safetyScore || 0;
+    const marginOfSafety = valuation.marginOfSafety || 0;
+    
+    if (overallScore >= 50 && financialsScore >= 50 && safetyScore >= 60 && marginOfSafety >= -15) {
+      return 'INVEST';
+    }
+  }
+  
+  return 'PASS';
+}
+
+/**
  * Node function to run reasoning models on final scorecard calculations.
  * 
  * @param {Object} state - The current LangGraph state.
@@ -21,6 +54,8 @@ async function generateRecommendationNode(state) {
     return {
       recommendation: {
         rating: 'Hold',
+        assignmentDecision: 'PASS',
+        researchRating: 'HOLD',
         targetPrice: null,
         investmentThesis: 'Resolution failed. No company selected.',
         risks: [],
@@ -117,10 +152,16 @@ Return only JSON. Do not write markdown quotes or conversational prefixes.
     data.targetPrice = valuation.consensusValue;
     data.confidenceScore = confidenceScore;
     data.rating = breakdown.rating;
+    
+    // Map assignment compliant variables
+    const ratingUpper = (breakdown.rating || 'HOLD').toUpperCase();
+    data.assignmentDecision = determineAssignmentDecision(scores, valuation);
+    data.researchRating = ratingUpper;
+    
     data.confidenceReasons = confidenceReasons;
     data.lastUpdated = lastUpdated;
 
-    console.log(`[Graph Node]: Investment report compiled. Recommendation rating: ${data.rating}`);
+    console.log(`[Graph Node]: Investment report compiled. Recommendation rating: ${data.rating} | Assignment Decision: ${data.assignmentDecision}`);
 
     return {
       recommendation: data,
@@ -130,9 +171,22 @@ Return only JSON. Do not write markdown quotes or conversational prefixes.
   } catch (err) {
     console.error(`[Graph Node]: LLM recommendation compilation failed: ${err.message}`);
     
+    const fallbackRating = scores.overallScore > 65 ? 'Hold' : 'Sell';
+    const ratingUpper = fallbackRating.toUpperCase();
+    const mockScores = {
+      breakdown: {
+        rating: fallbackRating,
+        overallScore: scores.overallScore,
+        financialsScore: scores.overallScore, // mock for fallback estimation
+        safetyScore: 70
+      }
+    };
+    
     // Graceful degradation: return a fallback recommendation object
     const fallbackRec = {
-      rating: scores.overallScore > 65 ? 'Hold/Buy' : 'Hold/Sell',
+      rating: fallbackRating,
+      assignmentDecision: determineAssignmentDecision(mockScores, valuation),
+      researchRating: ratingUpper,
       targetPrice: valuation.consensusValue,
       investmentThesis: `Quantitative scorecard calculation returned a score of ${scores.overallScore}/100. However, the qualitative synthesis failed due to: ${err.message}`,
       risks: ["System processing limits", "LLM fallback triggered"],

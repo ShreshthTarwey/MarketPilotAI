@@ -131,7 +131,14 @@ export default function ValuationTab({ reportData, currencySymbol, activeTab }) 
                       <td className="bold">Overall Scorecard Grade</td>
                       <td className="bold text-accent font-mono">{reportData.scores?.overallScore?.toFixed(1)} / 100</td>
                       <td className="bold">100%</td>
-                      <td className="bold text-accent">{reportData.recommendation?.rating || 'HOLD'}</td>
+                      <td className="bold text-accent">
+                        {(() => {
+                          const rawRating = reportData.recommendation?.rating || 'HOLD';
+                          const ratingUpper = (reportData.recommendation?.researchRating || rawRating).toUpperCase();
+                          const decision = reportData.recommendation?.assignmentDecision || (ratingUpper === 'BUY' ? 'INVEST' : 'PASS');
+                          return `${decision} (${ratingUpper})`;
+                        })()}
+                      </td>
                     </tr>
                   </>
                 );

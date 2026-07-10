@@ -208,11 +208,33 @@ export default function App() {
                 <span className="report-market-stitch">EQUITIES / {reportData.profile.exchange || reportData.resolvedIdentity.market || 'NASDAQ'}</span>
                 <h1 className="report-title-stitch">
                   {reportData.resolvedIdentity.ticker} <span className="report-name-stitch">{reportData.resolvedIdentity.name}</span>
-                  <span className={`stitch-badge-rating ${reportData.recommendation.rating?.toLowerCase()}`}>
-                    {reportData.recommendation.rating}
-                  </span>
                 </h1>
               </div>
+
+              {/* Dual-Level Recommendation Panel */}
+              {(() => {
+                const rawRating = reportData.recommendation.rating || 'HOLD';
+                const ratingUpper = (reportData.recommendation.researchRating || rawRating).toUpperCase();
+                const assignmentDecision = reportData.recommendation.assignmentDecision || (ratingUpper === 'BUY' ? 'INVEST' : 'PASS');
+                const researchRating = ratingUpper;
+
+                return (
+                  <div className="report-recommendation-panel-stitch">
+                    <div className="recommendation-level-stitch">
+                      <span className="recommendation-level-label-stitch">Assignment Decision</span>
+                      <span className={`stitch-badge-decision ${assignmentDecision.toLowerCase()}`}>
+                        {assignmentDecision}
+                      </span>
+                    </div>
+                    <div className="recommendation-level-stitch">
+                      <span className="recommendation-level-label-stitch">Research Rating</span>
+                      <span className={`stitch-badge-rating-new ${researchRating.toLowerCase()}`}>
+                        {researchRating}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div className="report-price-stitch">
                 <div className="price-row">

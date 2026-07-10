@@ -2247,3 +2247,129 @@ a:hover {
 [data-theme="light"] .terminal-prefix {
   color: #2563eb !important;
 }
+
+/* ========================================== */
+/* DUAL RECOMMENDATION BADGES IN HEADER       */
+/* ========================================== */
+.report-recommendation-panel-stitch {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 24px;
+  padding: 4px 20px;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+}
+
+.recommendation-level-stitch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.recommendation-level-label-stitch {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Decision Badges (INVEST/PASS) */
+.stitch-badge-decision {
+  font-size: 1.3rem;
+  font-weight: 800;
+  padding: 6px 20px;
+  border-radius: 8px;
+  text-transform: uppercase;
+  font-family: var(--display);
+  display: inline-block;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.stitch-badge-decision.invest {
+  background: rgba(26, 122, 74, 0.15);
+  color: var(--success);
+  border: 1.5px solid var(--success);
+}
+
+.stitch-badge-decision.pass {
+  background: rgba(186, 26, 26, 0.15);
+  color: var(--error);
+  border: 1.5px solid var(--error);
+}
+
+/* Rating Badges (BUY/HOLD/SELL) */
+.stitch-badge-rating-new {
+  font-size: 0.95rem;
+  font-weight: 700;
+  padding: 4px 14px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  font-family: var(--mono);
+  display: inline-block;
+  text-align: center;
+  border: 1px solid transparent;
+}
+
+.stitch-badge-rating-new.buy {
+  background: rgba(26, 122, 74, 0.08);
+  color: var(--success);
+  border-color: rgba(26, 122, 74, 0.2);
+}
+
+.stitch-badge-rating-new.hold {
+  background: rgba(122, 79, 0, 0.08);
+  color: var(--warning);
+  border-color: rgba(122, 79, 0, 0.2);
+}
+
+.stitch-badge-rating-new.sell {
+  background: rgba(186, 26, 26, 0.08);
+  color: var(--error);
+  border-color: rgba(186, 26, 26, 0.2);
+}
+
+/* Light theme overrides for clean contrast */
+[data-theme="light"] .stitch-badge-decision.invest {
+  background-color: #d1fae5 !important;
+  color: #059669 !important;
+  border: 1.5px solid #a7f3d0 !important;
+}
+
+[data-theme="light"] .stitch-badge-decision.pass {
+  background-color: #fee2e2 !important;
+  color: #dc2626 !important;
+  border: 1.5px solid #fca5a5 !important;
+}
+
+[data-theme="light"] .stitch-badge-rating-new.buy {
+  background-color: #d1fae5 !important;
+  color: #059669 !important;
+  border: 1px solid #a7f3d0 !important;
+}
+
+[data-theme="light"] .stitch-badge-rating-new.hold {
+  background-color: #fef3c7 !important;
+  color: #d97706 !important;
+  border: 1px solid #fde68a !important;
+}
+
+[data-theme="light"] .stitch-badge-rating-new.sell {
+  background-color: #fee2e2 !important;
+  color: #dc2626 !important;
+  border: 1px solid #fca5a5 !important;
+}
+
+@media (max-width: 768px) {
+  .report-recommendation-panel-stitch {
+    border-left: none;
+    border-right: none;
+    padding: 10px 0;
+    gap: 16px;
+    align-items: flex-start;
+  }
+}

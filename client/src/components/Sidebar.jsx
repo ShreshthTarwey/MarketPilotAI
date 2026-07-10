@@ -7,7 +7,12 @@ export default function Sidebar({ reportData, currencySymbol }) {
       <div className="stitch-card sidebar-card rationale-card-stitch">
         <div className="sidebar-card-header">
           <span className="sidebar-card-label" style={{ color: 'var(--text-primary)', fontWeight: '700' }}>
-            Why {reportData.recommendation.rating?.toUpperCase()}?
+            Why {(() => {
+              const rawRating = reportData.recommendation.rating || 'HOLD';
+              const ratingUpper = (reportData.recommendation.researchRating || rawRating).toUpperCase();
+              const decision = reportData.recommendation.assignmentDecision || (ratingUpper === 'BUY' ? 'INVEST' : 'PASS');
+              return `${decision} (${ratingUpper})`;
+            })()}?
           </span>
         </div>
         <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '0.85rem' }}>

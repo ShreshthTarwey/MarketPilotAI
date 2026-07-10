@@ -380,16 +380,16 @@ Static PDF generators, server-rendered text outputs, and standard dashboard temp
 ### 14. BUY / HOLD / SELL instead of BUY / PASS
 
 **Decision**
-Modeled recommendations using Buy, Hold, and Sell ratings rather than binary Buy/Pass.
+Expose both a binary Assignment Decision (INVEST / PASS) and a more detailed Research Rating (BUY / HOLD / SELL) on the presentation layer.
 
 **Why**
-Better reflects institutional equity research standards, where Hold naturally maps to PASS when interpreting assignment requirements.
+MarketPilot AI computes a detailed institutional recommendation (BUY/HOLD/SELL). A separate deterministic Assignment Decision (INVEST/PASS) is then derived from the overall quantitative analysis to satisfy the assignment's binary output requirement. This ensures that high-quality, low-risk companies (such as Apple or Microsoft) that might be rated HOLD due to moderate valuation premiums are correctly marked as INVEST rather than being misclassified as PASS.
 
 **Trade-off**
-Requires finer decision boundary thresholds (overall scores mapping to three states).
+Requires maintaining a dual-layer mapping interface in the API payload and frontend dashboard view components.
 
 **What we intentionally left out**
-Binary Buy/Pass flags and custom portfolio allocations.
+Raw binary-only classifiers and complex portfolio weighting recommendation outputs.
 
 ---
 
