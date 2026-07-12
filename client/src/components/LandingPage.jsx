@@ -162,7 +162,7 @@ export default function LandingPage({
         </div>
         <div className="preview-container">
           <img
-            src="https://lh3.googleusercontent.com/aida/AP1WRLsKDwuGkPKI4WeHpNK2XTS4Vdgk-4_Kbc7_Y___CJ99I1iKS7MsMZEjouwX7C_PXyj7OBzJg7DgLs9OFAkGXuVYLGCuu2LDu_TjKyxoaLK_Je4-e4Lgubt9yoc9pASObPpgHyg-VL0x1VY2LwEDI8vSrJl55-UrY-Ka4GlFZD22WUsQFVvvfoVX0SRwjMtY0KQ3lXUY6u0NOVr9V2M7fQ3LBtmppuGDZaouYLcQAygG-xMcNvEsMjKNFg"
+            src="/architecture_workflow.png"
             alt="MarketPilot AI Flow Diagram"
             className="preview-image"
           />
