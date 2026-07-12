@@ -2,7 +2,8 @@
 
 MarketPilot AI is a production-oriented AI Investment Research Agent designed to autonomously research global equities (US, Indian, and Global), compute deterministic health/growth metrics, validate evidence quality, and generate human-in-the-loop explainable investment recommendations ("Buy", "Hold", or "Sell").
 
-**Live Deployments:**
+**Live Deployments & Code Repository:**
+*   **GitHub Repository:** **[github.com/ShreshthTarwey/MarketPilotAI](https://github.com/ShreshthTarwey/MarketPilotAI)**
 *   **Frontend Client (Vercel):** **[market-pilot-ai-ten.vercel.app](https://market-pilot-ai-ten.vercel.app)**
 *   **Backend REST API (Render):** **[marketpilotai.onrender.com](https://marketpilotai.onrender.com)**
 
