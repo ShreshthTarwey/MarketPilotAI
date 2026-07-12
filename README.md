@@ -35,6 +35,8 @@ Follow these steps to configure your credentials and run the application locally
     GROQ_API_KEY_2=your_groq_key_2 (optional)
     GROQ_API_KEY_3=your_groq_key_3 (optional)
     GROQ_API_KEY_4=your_groq_key_4 (optional)
+    CACHE_TTL_MS=3600000
+    MAX_RECOLLECTION_ATTEMPTS=2
     ```
 *   **Frontend Endpoints:** Create a `.env` file in the `client/` directory to target your backend (defaults to local host if omitted):
     ```env
