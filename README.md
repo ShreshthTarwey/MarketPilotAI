@@ -169,311 +169,83 @@ flowchart TD
 
 ## Key decisions & trade-offs — what you chose and why, and what you left out
 
-### 1. LangGraph instead of LangChain Agents
-
-**Decision**
-Used LangGraph to construct a stateful directed acyclic graph (DAG) with explicit nodes and conditional edges.
-
-**Why**
-Delivers deterministic execution patterns, a visual flow structure, explicit graph state preservation across tasks, and reproducible routing logic, making testing and debugging significantly easier.
-
-**Trade-off**
-Requires more manual graph boilerplate and configuration compared to quick autonomous agent loops.
-
-**What we intentionally left out**
-Autonomous planning agents, recursive self-reflection cycles, and open-ended autonomous agent loops.
+### 1. LangGraph State Orchestration instead of LangChain loops
+*   **Decision:** Used LangGraph to manage the agent pipeline as a stateful, directed acyclic graph (DAG) with explicit nodes and conditional edges.
+*   **Why:** Unlike standard agent loops that can run recursively without bounds, LangGraph guarantees deterministic execution paths, clear state preservation, and predictable fallback transitions, which are critical for auditable financial audits.
+*   **Trade-off:** Requires more upfront engineering and graph schema declaration boilerplate compared to autonomous, open-ended agent libraries.
+*   **What we left out:** Open-ended autonomous planning loops and recursive self-reflection cycles that can run infinitely.
 
 ---
 
-### 2. React + Vite instead of Next.js
-
-**Decision**
-Built the frontend dashboard as a client-side Single Page Application (SPA) using React powered by Vite.
-
-**Why**
-The dashboard has zero SEO requirements, builds extremely quickly, simplifies bundle sizes, and runs on simple static web hosts without any server infrastructure.
-
-**Trade-off**
-Lacks Server-Side Rendering (SSR), Incremental Static Regeneration (ISR), and native React Server Components.
-
-**What we intentionally left out**
-SSR, ISR, SEO optimization, and file-based routing.
+### 2. React SPA (Vite) instead of Next.js SSR
+*   **Decision:** Developed the frontend as a client-side Single Page Application (SPA) using React powered by Vite.
+*   **Why:** The interface is an internal-grade research tool with zero SEO requirements. A client-side SPA builds instantly, reduces network deployment complexity, and runs on simple static storage (like Vercel or Netlify) without server overhead.
+*   **Trade-off:** Lacks Server-Side Rendering (SSR) and React Server Components, meaning initial load times depend on client-side JS bundle parsing.
+*   **What we left out:** Complex full-stack SSR frameworks, file-based routers, and ISR setups.
 
 ---
 
-### 3. Node.js + Express instead of Python/FastAPI
-
-**Decision**
-Selected Node.js with Express as the backend REST API gateway.
-
-**Why**
-Keeps the entire repository within a unified JavaScript ecosystem, facilitating shared utility libraries, reducing developer context switching, and leveraging the LangGraph.js ecosystem directly.
-
-**Trade-off**
-Lacks native Python numerical libraries (pandas, numpy) and FastAPI auto-documentation out of the box.
-
-**What we intentionally left out**
-Python microservices, FastAPI routers, and multithreading task systems.
+### 3. Serverless No-Database Architecture
+*   **Decision:** Excluded any SQL or NoSQL database layers.
+*   **Why:** MarketPilot AI runs real-time investment audits. Every request retrieves fresh live feeds rather than reading stale database snapshots. Eliminating a database prevents stale-data latency and reduces infrastructure maintenance.
+*   **Trade-off:** Users cannot persist research report history, save watchlists, or recall past queries across page refreshes.
+*   **What we left out:** PostgreSQL, MongoDB, or Firebase database storage integrations, user profiles, and session tables.
 
 ---
 
-### 4. No Database
-
-**Decision**
-Excluded any SQL or NoSQL database storage layers.
-
-**Why**
-The application executes real-time investment audits. Every user request queries active market feeds rather than reading stale history. There is no requirement for user accounts, watchlists, or data persistence.
-
-**Trade-off**
-Users cannot save research logs, store stock watchlists, or recall historical reports.
-
-**What we intentionally left out**
-PostgreSQL, MongoDB, Firebase database storage integrations, user profiles, and session storage.
+### 4. In-Memory Cache Singleton instead of Redis
+*   **Decision:** Implemented an in-process memory singleton cache map with automated TTL expiry limits.
+*   **Why:** Eliminates the operational overhead of running a separate database dependency while satisfying the 10-minute caching requirements with sub-millisecond retrieve speeds.
+*   **Trade-off:** The cache is completely wiped out during server restarts and cannot be shared across horizontally scaled server instances.
+*   **What we left out:** Redis instances, distributed cache synchronization layers, and persistent caches.
 
 ---
 
-### 5. In-Memory Cache instead of Redis
-
-**Decision**
-Implemented an in-memory process RAM singleton cache map with automated TTL expiry limits.
-
-**Why**
-Drastically minimizes infrastructure complexity, runs keylessly with zero operational dependencies, and satisfies the assignment caching requirements with sub-millisecond retrieve speeds.
-
-**Trade-off**
-Cache states are wiped out completely on server restarts and cannot be shared across multiple instances (unsuitable for horizontal scaling).
-
-**What we intentionally left out**
-Redis, distributed caching, cache replication, and persistent cache storage.
+### 5. Multi-Provider Data Integration
+*   **Decision:** Structured the collection router to query Yahoo Finance, then fall back to SEC EDGAR, Tavily Search, and LLM Extraction in sequence.
+*   **Why:** Maximizes data coverage resilience and protects the pipeline from individual endpoint failures or rate-limiting bans.
+*   **Trade-off:** Significantly increases implementation complexity and requires normalizing mismatched raw data schemas.
+*   **What we left out:** Paid institutional terminals (Bloomberg, Refinitiv) and custom third-party scrapers.
 
 ---
 
-### 6. Multi-Provider Data Architecture
-
-**Decision**
-Structured the collection router to query Yahoo Finance, then fall back to SEC EDGAR, Tavily Search, and LLM Extraction in sequence.
-
-**Why**
-Maximizes data coverage resilience and protects the pipeline from individual endpoint failures or rate-limiting bans.
-
-**Trade-off**
-Significantly increases implementation complexity and requires normalizing mismatched raw data schemas.
-
-**What we intentionally left out**
-Paid institutional terminals (Bloomberg, Refinitiv) and custom third-party scrapers.
+### 6. Deterministic Math Engine instead of LLM Calculations
+*   **Decision:** Programmed all valuation models (DCF, CAPM, multiples comp) and multi-factor scorecards in native JavaScript.
+*   **Why:** Guarantees absolute mathematical precision and eliminates LLM hallucinations or calculation drift. The LLM is restricted to qualitative interpretation.
+*   **Trade-off:** Limits model adjustments to pre-coded mathematical boundaries.
+*   **What we left out:** LLM-driven calculation agents, prompt-based formula solving, and python code execution sandboxes.
 
 ---
 
-### 7. Deterministic Calculations instead of LLM Math
-
-**Decision**
-Performed all DCF, multiples comp models, CAPM, safety ratios, and rating scoring programmatically in JavaScript.
-
-**Why**
-Guarantees absolute mathematical precision and eliminates LLM hallucinations or calculation drift. The LLM is restricted to qualitative interpretation.
-
-**Trade-off**
-Limits model adjustments to pre-coded mathematical boundaries.
-
-**What we intentionally left out**
-LLM-driven calculation agents, prompt-based formula solving, and python code execution sandboxes.
+### 7. Strict Company Resolution Similarity Gate
+*   **Decision:** Enforced a similarity validation gate using Levenshtein distance and acronym checks, requiring a minimum 70% threshold.
+*   **Why:** Prevents the orchestrator from researching the wrong company when fuzzy autocompletes return unrelated symbols.
+*   **Trade-off:** Ambiguous or highly misspelled company queries are rejected immediately and require manual refinement.
+*   **What we left out:** Automatic resolution matching below 70% confidence and raw unchecked search redirections.
 
 ---
 
-### 8. Multi-Factor Recommendation Engine
-
-**Decision**
-Designed a scoring system that weights Valuation (30%), Financial Health (30%), Safety/Risks (15%), Momentum (15%), and News (10%).
-
-**Why**
-Avoids myopic ratings based solely on DCF upside by factoring in balance sheet solvency leverage, news sentiment catalyst modifiers, and price trends.
-
-**Trade-off**
-Requires weight tuning and normalization when valuation data is partially missing.
-
-**What we intentionally left out**
-Simple single-factor buy rules and black-box machine learning classification models.
+### 8. Explainable AI Pipeline instead of Black-Box Summaries
+*   **Decision:** Exposes intermediate discount rates, present value arrays, subscore weights, news sentiments, and citations.
+*   **Why:** Enables users to fully audit the recommendation and verify the math behind the Buy/Hold/Sell rating.
+*   **Trade-off:** Yields a larger JSON payload and higher front-end component complexity.
+*   **What we left out:** Simple single-word recommendations and hidden calculation parameters.
 
 ---
 
-### 9. Strict Company Resolution Similarity Gate
-
-**Decision**
-Implemented a similarity validation gate using Levenshtein distance and acronym checks, enforcing a minimum 70% threshold.
-
-**Why**
-Prevents the orchestrator from researching the wrong company when fuzzy autocompletes return unrelated symbols.
-
-**Trade-off**
-Ambiguous or highly misspelled company queries are rejected immediately and require manual refinement.
-
-**What we intentionally left out**
-Automatic resolution matching below 70% confidence and raw unchecked search redirections.
+### 9. Progressive Graceful Degradation & Field Recovery
+*   **Decision:** Structured the orchestrator to check missing fields via an Evidence Quality Gate and attempt to recollection-patch only missing properties.
+*   **Why:** Prevents corrupting valuation formulas with null values by evaluating completeness prior to scoring.
+*   **Trade-off:** Increases pipeline execution latency when recollection loops are triggered.
+*   **What we left out:** Generative LLM validation checks and raw data bypass routes.
 
 ---
 
-### 10. Evidence Quality Gate
-
-**Decision**
-Built a programmatic Evidence Quality Gate node that grades profile, income statement, balance sheet, cash flow, and news data.
-
-**Why**
-Prevents corrupting valuation formulas with null values by evaluating completeness prior to scoring.
-
-**Trade-off**
-Increases pipeline execution latency when recollection loops are triggered.
-
-**What we intentionally left out**
-Generative LLM validation checks and raw data bypass routes.
-
----
-
-### 11. Field-Level Recovery
-
-**Decision**
-Configured the provider router to scan individual properties and patch only missing keys.
-
-**Why**
-Preserves the core numbers retrieved from trusted primary sources while avoiding inconsistencies from merging duplicate filings.
-
-**Trade-off**
-Requires strict property-by-property mapping definitions in code.
-
-**What we intentionally left out**
-Overwriting full statement sheets or falling back globally when a single cell is empty.
-
----
-
-### 12. Explainability instead of Black Box AI
-
-**Decision**
-Exposes intermediate discount rates, present value arrays, subscore weights, news sentiments, and citations.
-
-**Why**
-Enables users to fully audit the recommendation and verify the math behind the Buy/Hold/Sell rating.
-
-**Trade-off**
-Yields a larger JSON payload and higher front-end component complexity.
-
-**What we intentionally left out**
-Simple single-word recommendations and hidden calculation parameters.
-
----
-
-### 13. Interactive Dashboard instead of Static Report
-
-**Decision**
-Designed a tabbed glassmorphic dashboard featuring interactive period selectors and SVG progress wheels.
-
-**Why**
-Empowers users to inspect cash flows, view logs, toggle themes, and filter chart timelines dynamically.
-
-**Trade-off**
-Requires detailed front-end state management and browser-specific print stylesheet configurations.
-
-**What we intentionally left out**
-Static PDF generators, server-rendered text outputs, and standard dashboard templates.
-
----
-
-### 14. BUY / HOLD / SELL instead of BUY / PASS
-
-**Decision**
-Expose both a binary Assignment Decision (INVEST / PASS) and a more detailed Research Rating (BUY / HOLD / SELL) on the presentation layer.
-
-**Why**
-MarketPilot AI computes a detailed institutional recommendation (BUY/HOLD/SELL). A separate deterministic Assignment Decision (INVEST/PASS) is then derived from the overall quantitative analysis using the following rules:
-*   **`BUY` $\rightarrow$ `INVEST`:** Automatically marked as `INVEST` due to strong upside and fundamentals.
-*   **`HOLD` $\rightarrow$ `INVEST` (High-Quality Hold):** Marked as `INVEST` if the stock is a safe, high-quality business. This occurs when the Overall Score $\ge 50$, Financial Health Score $\ge 50$, Safety Score $\ge 60$, and the price is within a reasonable $15\%$ overvaluation premium (Margin of Safety $\ge -15\%$). This prevents premium businesses like Apple or Microsoft from being misclassified as `PASS` solely due to current market premiums.
-*   **`HOLD` $\rightarrow$ `PASS` (Low-Quality / Bubble Hold):** Marked as `PASS` if the stock fails any of the high-quality holding checks (e.g., overall score $< 50$, weak financial health, poor safety, or pricing bubble exceeding a $15\%$ premium).
-*   **`SELL` $\rightarrow$ `PASS`:** Automatically marked as `PASS` due to fundamental distress or extreme overvaluation.
-
-**Trade-off**
-Requires maintaining a dual-layer mapping interface in the API payload and frontend dashboard view components.
-
-**What we intentionally left out**
-Raw binary-only classifiers and complex portfolio weighting recommendation outputs.
-
----
-
-### 15. No Fine-Tuned Model
-
-**Decision**
-Deployed foundation models (Llama 3.3 and Gemini Flash) via key-rotated API pools.
-
-**Why**
-Eliminates the massive overhead, deployment costs, and maintenance associated with fine-tuning a custom model.
-
-**Trade-off**
-Exposes the pipeline to API provider availability and network latency.
-
-**What we intentionally left out**
-Custom LoRA training, model hosting, and offline local transformers.
-
----
-
-### 16. Live Market Data instead of Stored Datasets
-
-**Decision**
-Connected the backend directly to real-time APIs to fetch live prices and news.
-
-**Why**
-Ensures the scorecard evaluation remains accurate and reflective of current market conditions.
-
-**Trade-off**
-Execution speed is capped by external API response latency.
-
-**What we intentionally left out**
-Static financial CSV datasets, offline databases, and delayed historical dumps.
-
----
-
-### 17. Progressive Fallback Strategy
-
-**Decision**
-Implemented a multi-tiered fallback hierarchy (Yahoo Summary -> Yahoo TimeSeries -> SEC EDGAR -> Tavily Search -> LLM parse).
-
-**Why**
-Guarantees that the orchestrator degrades gracefully rather than throwing exceptions when APIs are rate-limited.
-
-**Trade-off**
-Increases response time when deep fallback tiers are triggered.
-
-**What we intentionally left out**
-Immediate throw exceptions and empty response returns.
-
----
-
-### 18. Modular Component Architecture
-
-**Decision**
-Refactored the monolithic frontend App.jsx into isolated child components in `src/components/`.
-
-**Why**
-Simplifies file complexity, prevents merge conflicts, and permits isolated testing of individual dashboard tabs.
-
-**Trade-off**
-Requires structured prop drilling and state coordination hooks.
-
-**What we intentionally left out**
-Monolithic UI structures and global state management libraries (Redux, Recoil).
-
----
-
-### 19. Why Google Stitch MCP was added
-
-**Decision**
-Integrated Google Stitch through Model Context Protocol (MCP).
-
-**Why**
-Allows for rapid UI prototyping, layout reviews, and design system variations under developer control.
-
-**Trade-off**
-Introduces dependency on MCP servers and host environments.
-
-**What we intentionally left out**
-Automatic unverified styling injections and raw code generation overrides.
+### 10. Dual-Layer Recommendation Presentation (Buy/Hold/Sell vs Invest/Pass)
+*   **Decision:** Separated the internal multi-factor research engine (BUY/HOLD/SELL) from a binary presentation decision layer (INVEST/PASS).
+*   **Why:** The assignment requires a binary Invest/Pass decision, but institutional workflows require more nuance. Rather than a simple lookup mapping, the binary `INVEST` / `PASS` decision is derived independently from the overall solvency, quality score, and valuation margin-of-safety metrics.
+*   **Trade-off:** Requires maintaining a dual-layer mapping interface in the API payload and frontend dashboard view components.
+*   **What we left out:** Raw binary-only classifiers and complex portfolio weighting recommendation outputs.
 
 # Example runs — your agent’s output on a few companies of your choice
 
@@ -702,6 +474,30 @@ The research orchestrator safely aborted execution because the query "123456" co
 *   [x] Research pipeline terminated safely
 *   [x] No financial analysis executed
 *   [x] User received structured validation warning
+
+---
+
+## Future Scope & Potential Enhancements
+
+- **Redis-based Distributed Cache:** Replace the current in-memory cache with Redis to support horizontal scaling and shared cache across multiple backend instances.
+
+- **Persistent Database:** Store historical research reports, watchlists, and recommendation history using PostgreSQL or MongoDB.
+
+- **User Authentication:** Allow users to create accounts, manage portfolios, and save previous analyses.
+
+- **Background Processing:** Execute long-running research tasks asynchronously using job queues such as BullMQ or RabbitMQ.
+
+- **Premium Financial Data:** Integrate institutional-grade providers (Bloomberg, Refinitiv, FMP) for richer and more reliable financial datasets.
+
+- **Advanced AI Reasoning:** Introduce multi-agent debate (Bull vs Bear vs Moderator) for more robust investment recommendations.
+
+- **Portfolio Analysis:** Evaluate recommendations in the context of a user's existing portfolio, sector allocation, and overall risk exposure.
+
+- **Interactive Valuation Controls:** Allow users to adjust assumptions like discount rate and terminal growth to observe real-time DCF sensitivity.
+
+- **Export & Sharing:** Generate professional PDF reports and shareable research links.
+
+- **CI/CD & Monitoring:** Add automated testing, deployment pipelines, and production monitoring with GitHub Actions, Prometheus, and Grafana.
 
 ---
 
